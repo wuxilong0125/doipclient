@@ -6,6 +6,7 @@
 #define __PAYLOAD_H__
 
 typedef std::vector<uint8_t> ByteVector;
+enum UdsPayloadParamOffsets : uint8_t { kUdsPayloadSidOffset = 0, kUdsPayloadSubFuncOffset = 1 };
 
 template <typename PayloadLengthType>
 class PayloadOwner {
@@ -26,7 +27,11 @@ class PayloadOwner {
   virtual ~PayloadOwner() {}
 
   ByteVector payload_;
-
+  /**
+   * @brief Get the Size of payload
+   * 
+   * @return size_t 
+   */
   inline size_t GetSize() const { return payload_.size(); }
 
   inline virtual void SetPayloadLength(PayloadLength payload_length,

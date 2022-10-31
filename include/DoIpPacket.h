@@ -9,6 +9,93 @@ enum DoIpProtocolVersions : uint8_t {
   kDoIpIsoDis13400_2_2012 = 0x02
 };
 
+/**
+ * \brief DoIP协议版本
+ */
+static const uint8_t kSupportedDoIpVersion(
+    DoIpProtocolVersions::kDoIpIsoDis13400_2_2012);
+
+/* DoIp Header format information */
+
+/**
+ * \brief 协议版本在DoIp头部的位置
+ */
+static const uint8_t kDoIp_ProtocolVersion_offset{0};
+
+/**
+ * \brief 协议版本长度大小
+ */
+static const uint8_t kDoIp_ProtocolVersion_length{1};
+
+/**
+ * \brief 协议版本字节取反后字节在DoIp头部的位置
+ */
+static const uint8_t kDoIp_InvProtocolVersion_offset{1};
+
+/**
+ * \brief 协议版本字节取反后长度大小
+ */
+static const uint8_t kDoIp_InvProtocolVersion_length{1};
+
+/**
+ * \brief 负载类型字节在DoIp头部的位置
+ */
+static const uint8_t kDoIp_PayloadType_offset{2};
+
+/**
+ * \brief 负载类型长度大小
+ */
+static const uint8_t kDoIp_PayloadType_length{2};
+
+/**
+ * \brief 负载长度字节在DoIp头部的位置
+ */
+static const uint8_t kDoIp_PayloadLength_offset{4};
+
+/**
+ * \brief 负载长度大小
+ */
+static const uint8_t kDoIp_PayloadLength_length{4};
+
+/**
+ * \brief DoIp头部的字节数
+ */
+static const uint8_t kDoIp_HeaderTotal_length{8};
+
+/**
+ * \brief Number of fields in the DoIp header
+ */
+static const uint8_t kDoIp_HeaderTotal_fields{5};
+
+/**
+ * \brief Definition of maximum protocol id
+ */
+static const uint8_t kDoIp_ProtocolVersion_max{0xFFU};
+
+enum GenericDoIpHeader : char {
+  kProtocolVersionIdx,
+  kInvProtocolVersionIdx,
+  kPayloadTypeIdx,
+  kPayloadLengthIdx,
+  kPayloadIdx
+};
+
+enum DoIpAckCodes : char {
+  Ack = 0x00,
+};
+
+enum DoIpNackCodes : char {
+  kIncorrectPatternFormat = 0x00,
+  kUnknownPayloadType = 0x01,
+  kMessageTooLarge = 0x02,
+  kOutOfMemory = 0x30,
+  kInvalidPayloadLength = 0x04
+};
+
+/**
+ * @brief 负载类型的值
+ *
+ */
 enum DoIpPayload : uint16_t {
   kGenericDoIpNack = 0,
   kVehicleIdentificationRequest = 0x0001,
@@ -30,6 +117,23 @@ enum DoIpPayload : uint16_t {
   kDiagnosticNack = 0x8003
 };
 
+/**
+ * \brief Enumerator for DoIp routing activation responses codes.
+ */
+enum DoIpRoutingActivationResponseCodes : uint8_t {
+  /* ISO 13400-2:2012 Table-25*/
+  kRoutingActivationDeniedUnknownSa = 0x00,
+  kRoutingActivationDeniedAllSocketsRegistered = 0x01,
+  kRoutingActivationDeniedSaDifferent = 0x02,
+  kRoutingActivationDeniedSaAlreadyRegsiteredAndActive = 0x03,
+  kRoutingActivationDeniedMissingAuthentication = 0x04,
+  kRoutingActivationDeniedRejectedConfirmation = 0x05,
+  kRoutingActivationDeniedUnsupportedRoutingActivationType = 0x06,
+  kRoutingActivationSuccessfullyActivated = 0x10,
+  kRoutingActivationWillActivatedConfirmationRequired = 0x11
+};
+
+
 class DoIpPacket : public PayloadOwner<uint32_t> {
  public:
   enum ByteOrder {
@@ -41,6 +145,7 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
 
   typedef int16_t PayloadType;
   typedef uint8_t ProtocolVersion;
+  typedef uint16_t AddressType;
 
  protected:
   ProtocolVersion protocol_version_;
