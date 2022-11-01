@@ -6,7 +6,9 @@
 
 enum DoIpProtocolVersions : uint8_t {
   kDoIpIsoDis13400_2_2010 = 0x01,
-  kDoIpIsoDis13400_2_2012 = 0x02
+  kDoIpIsoDis13400_2_2012 = 0x02,
+  kDoIpIsoDis13400_2_2019 = 0x03,
+  kVIDRequest = 0xFF
 };
 
 /**
