@@ -135,7 +135,6 @@ enum DoIpRoutingActivationResponseCodes : uint8_t {
   kRoutingActivationWillActivatedConfirmationRequired = 0x11
 };
 
-
 class DoIpPacket : public PayloadOwner<uint32_t> {
  public:
   enum ByteOrder {
