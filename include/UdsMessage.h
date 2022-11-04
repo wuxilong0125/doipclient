@@ -56,9 +56,7 @@ class UdsMessage : public PayloadOwner<uint16_t> {
    *
    * @param source_address
    */
-  inline void SetSa(const AddressType source_address) {
-    target_address_ = source_address;
-  }
+  inline void SetSa(const AddressType address) { source_address_ = address; }
 
   /**
    * @brief Get the Target address
@@ -67,6 +65,7 @@ class UdsMessage : public PayloadOwner<uint16_t> {
    */
   inline AddressType GetTa() const { return target_address_; }
 
+  inline void SetTa(const AddressType address) { target_address_ = address; }
   /**
    * @brief Get a bool flag whether message is negative response or not
    *

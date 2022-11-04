@@ -2,6 +2,17 @@
 
 #include <netinet/in.h>
 
+DoIpPacket::DoIpPacket(const DoIpPacket::ByteOrder byte_order)
+    : byte_order_(byte_order),
+      protocol_version_(2),
+      inv_protocol_version_(~protocol_version_),
+      payload_type_(0),
+      payload_length_(0) {
+}
+
+DoIpPacket::~DoIpPacket() {
+}
+
 void DoIpPacket::SetPayloadLength(PayloadLength payload_length, bool force) {
   PayloadOwner::SetPayloadLength(payload_length, force);
   if (force || (payload_length != this->payload_length_)) {
