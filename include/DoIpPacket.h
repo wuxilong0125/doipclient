@@ -137,6 +137,8 @@ enum DoIpRoutingActivationResponseCodes : uint8_t {
 
 class DoIpPacket : public PayloadOwner<uint32_t> {
  public:
+  // typedef std::array<struct iovec, kDoIp_HeaderTotal_fields> ScatterArray;
+  using ScatterArray = std::array<struct iovec, kDoIp_HeaderTotal_fields>;
   enum ByteOrder {
     kHost,
     kNetWork,
@@ -185,6 +187,17 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
    *
    */
   void Ntoh();
+
+  uint8_t VerifyPayloadType();
+  std::string GetVIN();
+  ByteVector GetLogicalAddress();
+  ByteVector GetEID();
+  ByteVector GetGID();
+  uint8_t GetFurtherActionRequied();
+  // TODO
+  int ConstructVehicleIdentificationRequest();
+
+  ScatterArray GetScatterArray();
 };
 
 #endif

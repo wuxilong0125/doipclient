@@ -2,16 +2,16 @@
 
 #include <netinet/in.h>
 
+#include "MultiByteType.h"
+
 DoIpPacket::DoIpPacket(const DoIpPacket::ByteOrder byte_order)
     : byte_order_(byte_order),
       protocol_version_(2),
       inv_protocol_version_(~protocol_version_),
       payload_type_(0),
-      payload_length_(0) {
-}
+      payload_length_(0) {}
 
-DoIpPacket::~DoIpPacket() {
-}
+DoIpPacket::~DoIpPacket() {}
 
 void DoIpPacket::SetPayloadLength(PayloadLength payload_length, bool force) {
   PayloadOwner::SetPayloadLength(payload_length, force);
@@ -37,3 +37,100 @@ void DoIpPacket::Ntoh() {
 }
 
 void DoIpPacket::setPayloadType(PayloadType type) { payload_type_ = type; }
+
+uint8_t DoIpPacket::VerifyPayloadType() {
+  switch (payload_type_) {
+    case DoIpPayload::kRoutingActivationRequest: {
+      if (payload_length_ != 11) {
+        payload_type_ = DoIpPayload::kGenericDoIpNack;
+        return DoIpNackCodes::kInvalidPayloadLength;
+      }
+      break;
+    }
+    case DoIpPayload::kRoutingActivationResponse: {
+      if ((payload_length_ != 13) && (payload_length_ != 9)) {
+        payload_type_ = DoIpPayload::kGenericDoIpNack;
+        return DoIpNackCodes::kInvalidPayloadLength;
+      }
+      break;
+    }
+    case DoIpPayload::kAliveCheckResponse: {
+      if (payload_length_ != 2) {
+        payload_type_ = DoIpPayload::kGenericDoIpNack;
+        return DoIpNackCodes::kInvalidPayloadLength;
+      }
+      break;
+    }
+    case DoIpPayload::kVehicleIdentificationRequest: {
+      if (payload_length_ != 0) {
+        payload_type_ = DoIpPayload::kGenericDoIpNack;
+        return DoIpNackCodes::kInvalidPayloadLength;
+      }
+      break;
+    }
+    case DoIpPayload::kVehicleAnnouncement: {
+      if (payload_length_ != 32) {
+        payload_type_ = DoIpPayload::kGenericDoIpNack;
+        return DoIpNackCodes::kInvalidPayloadLength;
+      }
+      break;
+    }
+    case DoIpPayload::kDiagnosticMessage: {
+      if (payload_length_ != 4) {
+        payload_type_ = DoIpPayload::kGenericDoIpNack;
+        return DoIpNackCodes::kInvalidPayloadLength;
+      }
+      break;
+    }
+    case DoIpPayload::kDiagnosticAck: {
+      if (payload_length_ != 5) {
+        payload_type_ = DoIpPayload::kGenericDoIpNack;
+        return DoIpNackCodes::kInvalidPayloadLength;
+      }
+      break;
+    }
+    case DoIpPayload::kDiagnosticNack: {
+      if (payload_length_ != 5) {
+        payload_type_ = DoIpPayload::kGenericDoIpNack;
+        return DoIpNackCodes::kInvalidPayloadLength;
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+  return 0xFF;
+}
+
+std::string DoIpPacket::GetVIN() {
+  return std::string(payload_.begin(), payload_.begin() + 17);
+}
+ByteVector DoIpPacket::GetLogicalAddress() {
+  return ByteVector(payload_.begin() + 17, payload_.begin() + 19);
+}
+ByteVector DoIpPacket::GetEID() {
+  return ByteVector(payload_.begin() + 19, payload_.begin() + 25);
+}
+ByteVector DoIpPacket::GetGID() {
+  return ByteVector(payload_.begin() + 25, payload_.begin() + 31);
+}
+uint8_t DoIpPacket::GetFurtherActionRequied() { return payload_.back(); }
+
+DoIpPacket::ScatterArray DoIpPacket::GetScatterArray() {
+  ScatterArray scatter_array;
+
+  scatter_array[kProtocolVersionIdx].iov_base = &protocol_version_;
+  scatter_array[kProtocolVersionIdx].iov_len = kDoIp_ProtocolVersion_length;
+  scatter_array[kInvProtocolVersionIdx].iov_base = &inv_protocol_version_;
+  scatter_array[kInvProtocolVersionIdx].iov_len =
+      kDoIp_InvProtocolVersion_length;
+  scatter_array[kPayloadTypeIdx].iov_base = &payload_type_;
+  scatter_array[kPayloadTypeIdx].iov_len = kDoIp_PayloadType_length;
+  scatter_array[kPayloadLengthIdx].iov_base = &payload_length_;
+  scatter_array[kPayloadLengthIdx].iov_len = kDoIp_PayloadLength_length;
+  scatter_array[kPayloadIdx].iov_base = payload_.data();
+  scatter_array[kPayloadIdx].iov_len = payload_.size();
+
+  return scatter_array;
+}

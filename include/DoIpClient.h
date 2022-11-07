@@ -16,7 +16,7 @@ static const in_port_t kUdpPort = 13400;
 static const int kMaxDataSize = 8092;
 class DoIpClient {
  private:
-  struct in_addr client_ip_, server_ip_;
+  struct sockaddr_in vehicle_ip_;
   int tcp_socket_ = -1;
   int udp_socket_ = -1;
   std::string server_ip_prefix_ = "169.254.";
@@ -25,6 +25,12 @@ class DoIpClient {
   std::thread tcp_handler_thread_;
   std::vector<std::string> local_ips_;
   struct sockaddr_in udp_sockaddr_;
+  std::string VIN;
+  ByteVector EID;
+  ByteVector GID;
+  ByteVector LogicalAddress_;
+  uint8_t FurtherActionRequired_;
+
  protected:
   void UdpHandler();
   void TcpHandler();
@@ -38,6 +44,10 @@ class DoIpClient {
   inline void SetServerIpPrefix(std::string ip) { server_ip_prefix_ = ip; }
   int SetUdpSocket(const char *ip, int &udpSockFd);
   int UdpHandler(int udp_socket);
-  int HandleUdpMessage(uint8_t msg[], ssize_t length, DoIpPacket &udp_packet);
+  uint8_t HandleUdpMessage(uint8_t msg[], ssize_t length,
+                           DoIpPacket &udp_packet);
+  int SendVehicleIdentificationRequest(const char *address, int udp_socket);
+  int SocketWrite(int socket, DoIpPacket &doip_packet, bool &is_socket_open,
+                   struct sockaddr_in *destination_address);
 };
 #endif
