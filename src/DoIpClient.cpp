@@ -2,9 +2,20 @@
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+#include <unistd.h>
 
 #include <cstring>
+#include <iostream>
+#include <thread>
+
+// #define DEBUG
+#ifndef DEBUG
+#define DEBUG(info) printf(info)
+#define DEBUG_M(info_1, info_2) printf(info_1, info_2)
+#endif
+
 DoIpClient::DoIpClient() {}
+DoIpClient::~DoIpClient() {}
 
 /**
  * @brief 获取主机所有Ip地址(与DoIp服务Ip在一个网段下)
@@ -29,6 +40,7 @@ int DoIpClient::GetAllLocalIps() {
       if (0 == std::strncmp(addressBuffer, server_ip_prefix_.c_str(),
                             strlen(server_ip_prefix_.c_str()))) {
         local_ips_.push_back(addressBuffer);
+        DEBUG_M("push local_ip: %s\n", addressBuffer);
       }
     }
     ifAddrStruct = ifAddrStruct->ifa_next;
@@ -39,6 +51,55 @@ int DoIpClient::GetAllLocalIps() {
   return 0;
 }
 
+int DoIpClient::FindTargetVehicleAddress() {
+  int re = GetAllLocalIps();
+  if (-1 == re) {
+    DEBUG("GetAllLocalIps ERROR.\n");
+    return -1;
+  }
+  int *udp_sockets;
+  udp_sockets = (int *)malloc(sizeof(int) * local_ips_.size());
+  for (int i = 0; i < local_ips_.size(); i++) {
+    DEBUG_M("local_ip: %s\n", local_ips_[i].c_str());
+    re = SetUdpSocket(local_ips_[i].c_str(), udp_sockets[i]);
+    if (-1 == re) {
+      DEBUG("SetUdpSocket is error.\n");
+      return -1;
+    }
+    std::thread receive_udp_msg_thread(&DoIpClient::UdpHandler, this,
+                                       std::ref(udp_sockets[i]));
+    receive_udp_msg_thread.detach();
+    sockaddr_in broad_addr;
+    broad_addr.sin_family = AF_INET;
+    broad_addr.sin_port = htons(kUdpPort); //将整形变量从主机字节序转变为网络字节序
+    inet_aton("255.255.255.255", &(broad_addr.sin_addr));
+    // broad_addr.sin_addr.s_addr = inet_addr("255.255.255.255");
+    DEBUG_M("udp_socket: %d\n", udp_sockets[i]);
+    re = SendVehicleIdentificationRequest(&broad_addr, udp_sockets[i]);
+    if (re == -1) {
+      DEBUG("Send SendVehicleIdentificationRequest ERROR.\n");
+      return -1;
+    }
+    if (udp_socket_ < 0) break;
+  }
+
+  for (int i = 0; i < (kTimeOut * 1000) / kTimeToSleep; i++) {
+    if (udp_socket_ != -1) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(kTimeToSleep));
+  }
+  // sleep(5);
+
+  if (udp_socket_ < 0) {
+    DEBUG("NO VehicleIdentificationResponse received.\n");
+    return -1;
+  }
+
+  for (int i = 0; i < local_ips_.size(); i++) close(udp_sockets[i]);
+  free(udp_sockets);
+
+  return 0;
+}
+
 int DoIpClient::SetUdpSocket(const char *ip, int &udpSockFd) {
   if (ip == nullptr) return -1;
   udpSockFd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -46,27 +107,44 @@ int DoIpClient::SetUdpSocket(const char *ip, int &udpSockFd) {
     return -1;
   }
 
-  struct sockaddr_in udp_sockaddr;
-  udp_sockaddr.sin_family = AF_INET;
-  udp_sockaddr.sin_port = htons(kUdpPort);
-  udp_sockaddr.sin_addr.s_addr = inet_addr(ip);
-  memset(&udp_sockaddr.sin_zero, 0, 8);
+  // struct sockaddr_in udp_sockaddr;
+  udp_sockaddr_.sin_family = AF_INET;
+  udp_sockaddr_.sin_port = htons(kUdpPort);
+  udp_sockaddr_.sin_addr.s_addr = inet_addr(ip);
+  memset(&udp_sockaddr_.sin_zero, 0, 8);
 
-  int retval{bind(udpSockFd, (const sockaddr *)(&udp_sockaddr),
+  int retval{bind(udpSockFd, (const sockaddr *)(&udp_sockaddr_),
                   sizeof(struct sockaddr_in))};
   if (retval < 0) {
+    DEBUG_M("bind is error: %d\n", errno);
     return -1;
   }
   return 0;
 }
 
-int DoIpClient::UdpHandler(int udp_socket) {
-  uint8_t receivedUdpData[kMaxDataSize];
+/**
+ * @brief 接收udp数据
+ *
+ * @param udp_socket
+ * @return int
+ */
+int DoIpClient::UdpHandler(int &udp_socket) {
+  DEBUG_M("UdpHandler socket: %d\n", udp_socket);
+  uint8_t received_udp_datas[kMaxDataSize];
   struct sockaddr_in client_addr;
+  client_addr.sin_family = AF_INET;
+  client_addr.sin_port = htons(kUdpPort);
+  client_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   socklen_t length(sizeof(struct sockaddr));
-  ssize_t bytes_received{recvfrom(udp_socket, receivedUdpData, kMaxDataSize, 0,
-                                  (struct sockaddr *)&client_addr, &length)};
+  DEBUG("recvfrom start: \n");
+  ssize_t bytes_received{recvfrom(udp_socket, received_udp_datas, kMaxDataSize,
+                                  0, (struct sockaddr *)&client_addr, &length)};
+  DEBUG("recvfrom end!\n");
+
+  DEBUG_M("received_udp_datas length: %d\n", bytes_received);
   if (bytes_received <= 0) {
+    
+    DEBUG_M("recvfrom error: %d\n", errno);
     return -1;
   }
   if (bytes_received > std::numeric_limits<uint8_t>::max()) {
@@ -74,7 +152,8 @@ int DoIpClient::UdpHandler(int udp_socket) {
   }
 
   DoIpPacket udp_packet(DoIpPacket::kHost);
-  uint8_t re = HandleUdpMessage(receivedUdpData, bytes_received, udp_packet);
+  uint8_t re = HandleUdpMessage(received_udp_datas, bytes_received, udp_packet);
+  DEBUG_M("HandleUdpMessage return value is : %d\n", re);
   if (0xFF == re &&
       udp_packet.payload_type_ == DoIpPayload::kVehicleAnnouncement) {
     if (udp_socket_ == -1) {
@@ -85,6 +164,7 @@ int DoIpClient::UdpHandler(int udp_socket) {
       EID = udp_packet.GetEID();
       GID = udp_packet.GetGID();
       FurtherActionRequired_ = udp_packet.GetFurtherActionRequied();
+      DEBUG_M("vehicle ip: %s", inet_ntoa(vehicle_ip_.sin_addr));
       return 0;
     }
   }
@@ -106,14 +186,17 @@ uint8_t DoIpClient::HandleUdpMessage(uint8_t msg[], ssize_t bytes_available,
   }
   if (~msg[kDoIp_ProtocolVersion_offset] !=
       msg[kDoIp_InvProtocolVersion_offset]) {
-    udp_packet.setPayloadType(DoIpPayload::kGenericDoIpNack);
+    udp_packet.SetPayloadType(DoIpPayload::kGenericDoIpNack);
+    printf("ProtocolVersion is 0x%llu\n",msg[kDoIp_ProtocolVersion_offset]);
+    printf("InvProtocolVersion is 0x%llu\n",msg[kDoIp_InvProtocolVersion_offset]);
+    DEBUG("HandleUdpMessage_f: ProtocolVersion not equal to ProtocolVersion\n");
     return DoIpNackCodes::kIncorrectPatternFormat;
   }
   DoIpPacket::PayloadLength expected_payload_length{bytes_available -
                                                     kDoIp_HeaderTotal_length};
   DoIpPacket udp_message{DoIpPacket::kHost};
   udp_message.SetPayloadLength(expected_payload_length);
-  udp_message.setPayloadType(
+  udp_message.SetPayloadType(
       DoIpPacket::PayloadType((msg[kDoIp_PayloadType_offset]) << 8) +
       msg[kDoIp_PayloadType_offset + 1]);
   udp_message.SetProtocolVersion(
@@ -131,18 +214,23 @@ uint8_t DoIpClient::HandleUdpMessage(uint8_t msg[], ssize_t bytes_available,
 }
 
 int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
-                             bool &is_socket_open,
-                             struct sockaddr_in *destination_address) {
-    if ((socket < 0) || !is_socket_open) {
-    is_socket_open = false;
+                            struct sockaddr_in *destination_address) {
+  if (socket < 0) {
+    DEBUG("SocketWrite's socket param ERROR.\n");
     return -1;
   }
 
   DoIpPacket::ScatterArray scatter_array(doip_packet.GetScatterArray());
-
+  // {
+  //   for (auto a : scatter_array) {
+  //     std::cout << &(a.iov_base) << " " << a.iov_len << std::endl;
+  //   }
+  // }
   // Use Message Header for a scattered send
   struct msghdr message_header;
+
   if (destination_address != nullptr) {
+    DEBUG_M("broadaddr: %s \n", inet_ntoa(destination_address->sin_addr));
     message_header.msg_name = destination_address;
     message_header.msg_namelen = sizeof(sockaddr_in);
   } else {
@@ -157,20 +245,20 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
 
   // Briefly switch DoIpPacket to network byte order
   doip_packet.Hton();
-  ssize_t bytesSent{sendmsg(socket, &message_header, 0)};
 
-  
+  ssize_t bytesSent{sendmsg(socket, &message_header, 0)};
 
   doip_packet.Ntoh();
 
   if (bytesSent < 0) {
+    DEBUG_M("sendmsg error : %d\n", errno);
     // Check for error or socket closed
     // int current_errno{errno};
     // if (IsSocketClosed(current_errno)) {
-    
+
     //   is_socket_open = false;
     // } else {
-     
+
     // }
     return -1;
   } else if (((size_t)bytesSent) <
@@ -178,7 +266,41 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
     // Check whether insufficient data was sent
     // throw exception::IOException();
     // T_UTILS_PRINT("IOException ERROR");
+    DEBUG("SocketWrite bytesSent is smaller than packet Length.\n");
     return -1;
   }  // else we are happy.
   return 0;
+}
+int DoIpClient::SendVehicleIdentificationRequest(
+    struct sockaddr_in *destination_address, int udp_socket) {
+  if (destination_address == nullptr) {
+    DEBUG("destination_address is null.\n");
+    return -1;
+  }
+  int broadcast = 1;
+  int socket_error = setsockopt(udp_socket, SOL_SOCKET, SO_BROADCAST,
+                                &broadcast, sizeof(broadcast));
+  if (-1 == socket_error) {
+    DEBUG("setsockopt(broadcast) is error.\n");
+    return -1;
+  }
+  struct timeval tv;
+  tv.tv_sec = 5;
+  tv.tv_usec = 0;
+  socket_error =
+      setsockopt(udp_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+  if (-1 == socket_error) {
+    DEBUG("setsockopt(timeout) is error.\n");
+    return -1;
+  }
+  DoIpPacket vehicle_Id_request(DoIpPacket::kHost);
+  vehicle_Id_request.ConstructVehicleIdentificationRequest();
+  vehicle_Id_request.SetPayloadType(DoIpPayload::kVehicleIdentificationRequest);
+  vehicle_Id_request.SetPayloadLength(0);
+
+  int re = SocketWrite(udp_socket, vehicle_Id_request, destination_address);
+  if (0 == re)
+    return 0;
+  else
+    return -1;
 }

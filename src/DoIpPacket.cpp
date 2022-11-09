@@ -36,7 +36,6 @@ void DoIpPacket::Ntoh() {
   }
 }
 
-void DoIpPacket::setPayloadType(PayloadType type) { payload_type_ = type; }
 
 uint8_t DoIpPacket::VerifyPayloadType() {
   switch (payload_type_) {
@@ -133,4 +132,9 @@ DoIpPacket::ScatterArray DoIpPacket::GetScatterArray() {
   scatter_array[kPayloadIdx].iov_len = payload_.size();
 
   return scatter_array;
+}
+
+int DoIpPacket::ConstructVehicleIdentificationRequest() {
+  SetProtocolVersion(DoIpProtocolVersions::kVIDRequest);
+
 }

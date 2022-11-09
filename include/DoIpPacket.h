@@ -1,7 +1,7 @@
 #ifndef __DO_IP_PACKET_H__
 #define __DO_IP_PACKET_H__
 #include <stdint.h>
-
+#include <array>
 #include "Payload.h"
 
 enum DoIpProtocolVersions : uint8_t {
@@ -138,7 +138,7 @@ enum DoIpRoutingActivationResponseCodes : uint8_t {
 class DoIpPacket : public PayloadOwner<uint32_t> {
  public:
   // typedef std::array<struct iovec, kDoIp_HeaderTotal_fields> ScatterArray;
-  using ScatterArray = std::array<struct iovec, kDoIp_HeaderTotal_fields>;
+  typedef std::array<struct iovec, kDoIp_HeaderTotal_fields> ScatterArray;
   enum ByteOrder {
     kHost,
     kNetWork,
@@ -175,7 +175,7 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
     return (protocol_version_);
   }
 
-  void setPayloadType(PayloadType type);
+  void SetPayloadType(PayloadType type) { payload_type_ = type; }
   /**
    * @brief 本地字节序(小端)转为网络字节序(大端)
    *
@@ -194,7 +194,6 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
   ByteVector GetEID();
   ByteVector GetGID();
   uint8_t GetFurtherActionRequied();
-  // TODO
   int ConstructVehicleIdentificationRequest();
 
   ScatterArray GetScatterArray();
