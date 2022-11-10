@@ -36,7 +36,6 @@ void DoIpPacket::Ntoh() {
   }
 }
 
-
 uint8_t DoIpPacket::VerifyPayloadType() {
   switch (payload_type_) {
     case DoIpPayload::kRoutingActivationRequest: {
@@ -136,5 +135,12 @@ DoIpPacket::ScatterArray DoIpPacket::GetScatterArray() {
 
 int DoIpPacket::ConstructVehicleIdentificationRequest() {
   SetProtocolVersion(DoIpProtocolVersions::kVIDRequest);
+}
 
+void DoIpPacket::SetPayloadType(uint8_t u_1, uint8_t u_2) {
+  PayloadType type;
+  type = ((uint16_t)u_1 << 8) + (uint16_t)u_2;
+
+  payload_type_ = type;
+    // printf("type: 0x%04x\n",payload_type_);
 }

@@ -11,7 +11,21 @@
 // #define DEBUG
 #ifndef DEBUG
 #define DEBUG(info) printf(info)
-#define DEBUG_M(info_1, info_2) printf(info_1, info_2)
+#endif
+
+#define PRINT
+#ifndef PRINT
+#define PRINT(info_1, info_2) printf(info_1, info_2)
+#endif
+
+#define PRINT_V
+#ifndef PRINT_V
+#define PRINT_V(_1, _2, _3) \
+  printf(_1);               \
+  for (auto v : _2) {       \
+    printf(_3, v);          \
+  }                         \
+  printf("\n")
 #endif
 
 DoIpClient::DoIpClient() {}
@@ -40,7 +54,7 @@ int DoIpClient::GetAllLocalIps() {
       if (0 == std::strncmp(addressBuffer, server_ip_prefix_.c_str(),
                             strlen(server_ip_prefix_.c_str()))) {
         local_ips_.push_back(addressBuffer);
-        DEBUG_M("push local_ip: %s\n", addressBuffer);
+        PRINT("push local_ip: %s\n", addressBuffer);
       }
     }
     ifAddrStruct = ifAddrStruct->ifa_next;
@@ -60,7 +74,7 @@ int DoIpClient::FindTargetVehicleAddress() {
   int *udp_sockets;
   udp_sockets = (int *)malloc(sizeof(int) * local_ips_.size());
   for (int i = 0; i < local_ips_.size(); i++) {
-    DEBUG_M("local_ip: %s\n", local_ips_[i].c_str());
+    PRINT("local_ip: %s\n", local_ips_[i].c_str());
     re = SetUdpSocket(local_ips_[i].c_str(), udp_sockets[i]);
     if (-1 == re) {
       DEBUG("SetUdpSocket is error.\n");
@@ -71,10 +85,11 @@ int DoIpClient::FindTargetVehicleAddress() {
     receive_udp_msg_thread.detach();
     sockaddr_in broad_addr;
     broad_addr.sin_family = AF_INET;
-    broad_addr.sin_port = htons(kUdpPort); //将整形变量从主机字节序转变为网络字节序
+    broad_addr.sin_port =
+        htons(kUdpPort);  //将整形变量从主机字节序转变为网络字节序
     inet_aton("255.255.255.255", &(broad_addr.sin_addr));
     // broad_addr.sin_addr.s_addr = inet_addr("255.255.255.255");
-    DEBUG_M("udp_socket: %d\n", udp_sockets[i]);
+    PRINT("udp_socket: %d\n", udp_sockets[i]);
     re = SendVehicleIdentificationRequest(&broad_addr, udp_sockets[i]);
     if (re == -1) {
       DEBUG("Send SendVehicleIdentificationRequest ERROR.\n");
@@ -116,7 +131,7 @@ int DoIpClient::SetUdpSocket(const char *ip, int &udpSockFd) {
   int retval{bind(udpSockFd, (const sockaddr *)(&udp_sockaddr_),
                   sizeof(struct sockaddr_in))};
   if (retval < 0) {
-    DEBUG_M("bind is error: %d\n", errno);
+    PRINT("bind is error: %d\n", errno);
     return -1;
   }
   return 0;
@@ -129,7 +144,7 @@ int DoIpClient::SetUdpSocket(const char *ip, int &udpSockFd) {
  * @return int
  */
 int DoIpClient::UdpHandler(int &udp_socket) {
-  DEBUG_M("UdpHandler socket: %d\n", udp_socket);
+  PRINT("UdpHandler socket: %d\n", udp_socket);
   uint8_t received_udp_datas[kMaxDataSize];
   struct sockaddr_in client_addr;
   client_addr.sin_family = AF_INET;
@@ -141,10 +156,9 @@ int DoIpClient::UdpHandler(int &udp_socket) {
                                   0, (struct sockaddr *)&client_addr, &length)};
   DEBUG("recvfrom end!\n");
 
-  DEBUG_M("received_udp_datas length: %d\n", bytes_received);
+  PRINT("received_udp_datas length: %d\n", bytes_received);
   if (bytes_received <= 0) {
-    
-    DEBUG_M("recvfrom error: %d\n", errno);
+    PRINT("recvfrom error: %d\n", errno);
     return -1;
   }
   if (bytes_received > std::numeric_limits<uint8_t>::max()) {
@@ -153,7 +167,8 @@ int DoIpClient::UdpHandler(int &udp_socket) {
 
   DoIpPacket udp_packet(DoIpPacket::kHost);
   uint8_t re = HandleUdpMessage(received_udp_datas, bytes_received, udp_packet);
-  DEBUG_M("HandleUdpMessage return value is : %d\n", re);
+  PRINT("HandleUdpMessage return value is : 0x%02x\n", re);
+  PRINT("udp packet type is : 0x%04x\n", udp_packet.payload_type_);
   if (0xFF == re &&
       udp_packet.payload_type_ == DoIpPayload::kVehicleAnnouncement) {
     if (udp_socket_ == -1) {
@@ -164,7 +179,11 @@ int DoIpClient::UdpHandler(int &udp_socket) {
       EID = udp_packet.GetEID();
       GID = udp_packet.GetGID();
       FurtherActionRequired_ = udp_packet.GetFurtherActionRequied();
-      DEBUG_M("vehicle ip: %s", inet_ntoa(vehicle_ip_.sin_addr));
+      PRINT("vehicle ip: %s\n", inet_ntoa(vehicle_ip_.sin_addr));
+      PRINT("VIN : %s\n", VIN.c_str());
+      PRINT_V("LogicalAddress_: 0x", LogicalAddress_, "%02x");
+      PRINT_V("EID: 0x", EID, "%02x");
+      PRINT_V("GID: 0x", GID, "%02x");
       return 0;
     }
   }
@@ -184,31 +203,36 @@ uint8_t DoIpClient::HandleUdpMessage(uint8_t msg[], ssize_t bytes_available,
   if (bytes_available < kDoIp_HeaderTotal_length) {
     return DoIpNackCodes::kInvalidPayloadLength;
   }
-  if (~msg[kDoIp_ProtocolVersion_offset] !=
+  // ~会将小整型提升提升为较大的整型
+  if ((uint8_t)(~msg[kDoIp_ProtocolVersion_offset]) !=
       msg[kDoIp_InvProtocolVersion_offset]) {
     udp_packet.SetPayloadType(DoIpPayload::kGenericDoIpNack);
-    printf("ProtocolVersion is 0x%llu\n",msg[kDoIp_ProtocolVersion_offset]);
-    printf("InvProtocolVersion is 0x%llu\n",msg[kDoIp_InvProtocolVersion_offset]);
+    printf("ProtocolVersion is 0x%02x\n",
+           (uint8_t)(~msg[kDoIp_ProtocolVersion_offset]));
+    printf("InvProtocolVersion is 0x%02x\n", msg[1]);
     DEBUG("HandleUdpMessage_f: ProtocolVersion not equal to ProtocolVersion\n");
     return DoIpNackCodes::kIncorrectPatternFormat;
   }
   DoIpPacket::PayloadLength expected_payload_length{bytes_available -
                                                     kDoIp_HeaderTotal_length};
-  DoIpPacket udp_message{DoIpPacket::kHost};
-  udp_message.SetPayloadLength(expected_payload_length);
-  udp_message.SetPayloadType(
-      DoIpPacket::PayloadType((msg[kDoIp_PayloadType_offset]) << 8) +
-      msg[kDoIp_PayloadType_offset + 1]);
-  udp_message.SetProtocolVersion(
+  udp_packet.SetPayloadLength(expected_payload_length);
+  PRINT("udp packet type first value is 0x%02x\n",
+        msg[kDoIp_PayloadType_offset]);
+  PRINT("udp packet type second value is 0x%02x\n",
+        msg[kDoIp_PayloadType_offset + 1]);
+
+  udp_packet.SetPayloadType(msg[kDoIp_PayloadType_offset],
+                            msg[kDoIp_PayloadType_offset + 1]);
+  udp_packet.SetProtocolVersion(
       DoIpPacket::ProtocolVersion(msg[kDoIp_ProtocolVersion_offset]));
-  uint8_t re = udp_message.VerifyPayloadType();
+  uint8_t re = udp_packet.VerifyPayloadType();
   if (0xFF != re) return re;
-  if (re == DoIpPayload::kRoutingActivationResponse) {
-    // 填充负载内容
-    for (int i = kDoIp_HeaderTotal_length; i < bytes_available; i++) {
-      udp_message.payload_.at(i - kDoIp_HeaderTotal_length) = msg[i];
-    }
+  // if (udp_packet.payload_type_ == DoIpPayload::kRoutingActivationResponse) {
+  // 填充负载内容
+  for (int i = kDoIp_HeaderTotal_length; i < bytes_available; i++) {
+    udp_packet.payload_.at(i - kDoIp_HeaderTotal_length) = msg[i];
   }
+  // }
 
   return 0xFF;
 }
@@ -230,7 +254,7 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
   struct msghdr message_header;
 
   if (destination_address != nullptr) {
-    DEBUG_M("broadaddr: %s \n", inet_ntoa(destination_address->sin_addr));
+    PRINT("broadaddr: %s \n", inet_ntoa(destination_address->sin_addr));
     message_header.msg_name = destination_address;
     message_header.msg_namelen = sizeof(sockaddr_in);
   } else {
@@ -251,7 +275,7 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
   doip_packet.Ntoh();
 
   if (bytesSent < 0) {
-    DEBUG_M("sendmsg error : %d\n", errno);
+    PRINT("sendmsg error : %d\n", errno);
     // Check for error or socket closed
     // int current_errno{errno};
     // if (IsSocketClosed(current_errno)) {

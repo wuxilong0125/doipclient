@@ -45,6 +45,7 @@ class DoIpClient {
   int UdpHandler(int &udp_socket);
   uint8_t HandleUdpMessage(uint8_t msg[], ssize_t length,
                            DoIpPacket &udp_packet);
+  
   int SendVehicleIdentificationRequest(struct sockaddr_in *destination_address,
                                        int udp_socket);
   int SocketWrite(int socket, DoIpPacket &doip_packet,

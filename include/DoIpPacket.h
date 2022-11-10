@@ -1,7 +1,9 @@
 #ifndef __DO_IP_PACKET_H__
 #define __DO_IP_PACKET_H__
 #include <stdint.h>
+
 #include <array>
+
 #include "Payload.h"
 
 enum DoIpProtocolVersions : uint8_t {
@@ -176,6 +178,7 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
   }
 
   void SetPayloadType(PayloadType type) { payload_type_ = type; }
+  void SetPayloadType(uint8_t u_1, uint8_t u_2) ;
   /**
    * @brief 本地字节序(小端)转为网络字节序(大端)
    *
