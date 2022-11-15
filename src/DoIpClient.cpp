@@ -8,17 +8,24 @@
 #include <iostream>
 #include <thread>
 
+#include "CTimer.h"
+
 // #define DEBUG
 #ifndef DEBUG
 #define DEBUG(info) printf(info)
 #endif
 
-#define PRINT
+// #define PRINT
 #ifndef PRINT
 #define PRINT(info_1, info_2) printf(info_1, info_2)
 #endif
 
-#define PRINT_V
+// #define CPRINT
+#ifndef CPRINT
+#define CPRINT(x) std::cout << "[" << __FUNCTION__ << "]" << x << std::endl;
+#endif
+
+// #define PRINT_V
 #ifndef PRINT_V
 #define PRINT_V(_1, _2, _3) \
   printf(_1);               \
@@ -28,9 +35,23 @@
   printf("\n")
 #endif
 
-DoIpClient::DoIpClient() {}
-DoIpClient::~DoIpClient() {}
+DoIpClient::DoIpClient() {
+  timer = new CTimer(
+      std::bind(&DoIpClient::TimerCallBack, this, std::placeholders::_1));
+}
+DoIpClient::~DoIpClient() {
+  if (timer) {
+    delete timer;
+  }
+}
 
+void DoIpClient::TimerCallBack(bool socket) {
+  if (!socket) {
+    return;
+  }
+
+  CloseTcpConnection();
+}
 /**
  * @brief 获取主机所有Ip地址(与DoIp服务Ip在一个网段下)
  *
@@ -86,7 +107,7 @@ int DoIpClient::FindTargetVehicleAddress() {
     sockaddr_in broad_addr;
     broad_addr.sin_family = AF_INET;
     broad_addr.sin_port =
-        htons(kUdpPort);  //将整形变量从主机字节序转变为网络字节序
+        htons(kPort);  //将整形变量从主机字节序转变为网络字节序
     inet_aton("255.255.255.255", &(broad_addr.sin_addr));
     // broad_addr.sin_addr.s_addr = inet_addr("255.255.255.255");
     PRINT("udp_socket: %d\n", udp_sockets[i]);
@@ -124,7 +145,7 @@ int DoIpClient::SetUdpSocket(const char *ip, int &udpSockFd) {
 
   // struct sockaddr_in udp_sockaddr;
   udp_sockaddr_.sin_family = AF_INET;
-  udp_sockaddr_.sin_port = htons(kUdpPort);
+  udp_sockaddr_.sin_port = htons(kPort);
   udp_sockaddr_.sin_addr.s_addr = inet_addr(ip);
   memset(&udp_sockaddr_.sin_zero, 0, 8);
 
@@ -148,7 +169,7 @@ int DoIpClient::UdpHandler(int &udp_socket) {
   uint8_t received_udp_datas[kMaxDataSize];
   struct sockaddr_in client_addr;
   client_addr.sin_family = AF_INET;
-  client_addr.sin_port = htons(kUdpPort);
+  client_addr.sin_port = htons(kPort);
   client_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   socklen_t length(sizeof(struct sockaddr));
   DEBUG("recvfrom start: \n");
@@ -190,6 +211,36 @@ int DoIpClient::UdpHandler(int &udp_socket) {
   return -1;
 }
 
+int DoIpClient::TcpHandler() {
+  if (inet_ntoa(vehicle_ip_.sin_addr) == nullptr) {
+    DEBUG("Get ServerIP ERROR.\n");
+    return -1;
+  }
+
+  tcp_socket_ = socket(AF_INET, SOCK_STREAM, 0);
+
+  if (tcp_socket_ <= 0) return -1;
+  tcp_sockaddr_.sin_family = AF_INET;
+  tcp_sockaddr_.sin_port = htons(kPort);
+  tcp_sockaddr_.sin_addr = vehicle_ip_.sin_addr;
+  int re = connect(tcp_socket_, (struct sockaddr *)&tcp_sockaddr_,
+                   sizeof(tcp_sockaddr_));
+  if (-1 == re) {
+    return -1;
+  }
+
+  std::thread receive_tcp_msg_thread_(&DoIpClient::HandleTcpMessage, this);
+  handle_of_tcp_thread_ = receive_tcp_msg_thread_.native_handle();
+  receive_tcp_msg_thread_.detach();
+
+  return 0;
+}
+
+void DoIpClient::CloseTcpConnection() {
+  pthread_cancel(handle_of_tcp_thread_);
+  close(tcp_socket_);
+  PRINT("Disconnect from server %s\n", inet_ntoa(tcp_sockaddr_.sin_addr));
+}
 /**
  * @brief 处理udp接收到的数据
  *
@@ -295,6 +346,62 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
   }  // else we are happy.
   return 0;
 }
+
+int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
+  doip_packet.Ntoh();
+  doip_packet.SetPayloadLength(0);
+  DoIpPacket::PayloadLength expected_payload_length{
+      doip_packet.payload_length_};
+  DoIpPacket::ScatterArray scatter_arry(doip_packet.GetScatterArray());
+
+  struct msghdr message_header;
+  message_header.msg_name = NULL;
+  message_header.msg_namelen = 0;
+  message_header.msg_iov = scatter_arry.begin();
+  message_header.msg_iovlen = scatter_arry.size();
+  message_header.msg_control = nullptr;
+  message_header.msg_controllen = 0;
+  message_header.msg_flags = 0;
+
+  doip_packet.Hton();
+
+  ssize_t bytesReceived{recvmsg(socket, &message_header, 0)};
+
+  if (bytesReceived < 0) {
+    CPRINT("ERROR: " + std::to_string(errno));
+    return -1;
+  }
+  if (bytesReceived < ((ssize_t)kDoIp_HeaderTotal_length)) {
+    CPRINT(" Incomplete DoIp Header received.");
+    throw std::runtime_error("Incomplete DoIp Header received.");
+    return -1;
+  }
+
+  if (bytesReceived > ((ssize_t)kDoIp_HeaderTotal_length)) {
+    CPRINT("Extra Payload bytes read for DoIp Packet.");
+    throw std::runtime_error("Extra Payload bytes read for DoIp Packet.");
+    return -1;
+  }
+
+  return 0;
+}
+
+int DoIpClient::SocketReadPayload(int socket, DoIpPacket &doip_packet) {
+  DoIpPacket::PayloadLength buffer_fill(0);
+
+  while (buffer_fill < doip_packet.payload_.size()) {
+    ssize_t bytedRead{recv(socket, &(doip_packet.payload_.at(buffer_fill)),
+                           (doip_packet.payload_.size() - buffer_fill), 0)};
+    if (bytedRead < 0) {
+      CPRINT("recv ERROR :" + std::to_string(errno));
+      return -1;
+    }
+    buffer_fill += bytedRead;
+  };
+  return 0;
+
+}
+
 int DoIpClient::SendVehicleIdentificationRequest(
     struct sockaddr_in *destination_address, int udp_socket) {
   if (destination_address == nullptr) {
