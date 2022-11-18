@@ -9,6 +9,7 @@
 #include <thread>
 
 #include "CTimer.h"
+#include "MultiByteType.h"
 
 // #define DEBUG
 #ifndef DEBUG
@@ -229,7 +230,8 @@ int DoIpClient::TcpHandler() {
     return -1;
   }
 
-  std::thread receive_tcp_msg_thread_(&DoIpClient::HandleTcpMessage, this);
+  std::thread receive_tcp_msg_thread_(&DoIpClient::HandleTcpMessage, this,
+                                      tcp_socket_);
   handle_of_tcp_thread_ = receive_tcp_msg_thread_.native_handle();
   receive_tcp_msg_thread_.detach();
 
@@ -240,6 +242,11 @@ void DoIpClient::CloseTcpConnection() {
   pthread_cancel(handle_of_tcp_thread_);
   close(tcp_socket_);
   PRINT("Disconnect from server %s\n", inet_ntoa(tcp_sockaddr_.sin_addr));
+}
+
+void DoIpClient::ReconnectServer() {
+  CloseTcpConnection();
+  TcpHandler();
 }
 /**
  * @brief 处理udp接收到的数据
@@ -278,14 +285,82 @@ uint8_t DoIpClient::HandleUdpMessage(uint8_t msg[], ssize_t bytes_available,
       DoIpPacket::ProtocolVersion(msg[kDoIp_ProtocolVersion_offset]));
   uint8_t re = udp_packet.VerifyPayloadType();
   if (0xFF != re) return re;
-  // if (udp_packet.payload_type_ == DoIpPayload::kRoutingActivationResponse) {
   // 填充负载内容
   for (int i = kDoIp_HeaderTotal_length; i < bytes_available; i++) {
     udp_packet.payload_.at(i - kDoIp_HeaderTotal_length) = msg[i];
   }
-  // }
 
   return 0xFF;
+}
+
+int DoIpClient::HandleTcpMessage(int socket) {
+  if (socket < 0) {
+    CPRINT("ERROR : No Tcp Socket set.");
+    return -1;
+  }
+
+  while (true) {
+    DoIpPacket doip_tcp_message(DoIpPacket::kNetWork);
+
+    int re = SocketReadHeader(socket, doip_tcp_message);
+    if (re == -1) {
+      CPRINT("SocketReadHeader is ERROR.");
+      continue;
+    }
+    if (0 == re) {
+      reconnect_tcp_counter_++;
+      if (reconnect_tcp_counter_ == 5) {
+        reconnect_tcp_counter_ = 0;
+        ReconnectServer();
+      }
+      continue;
+    }
+    if (!timer->IsRunning()) {
+      CPRINT("time-over.");
+      continue;
+    }
+    uint8_t v_code = doip_tcp_message.VerifyPayloadType();
+    if (v_code != 0xFF) {
+      CPRINT("PayloadType ERROR: " + std::to_string(v_code));
+      continue;
+    }
+    if (doip_tcp_message.payload_length_ != 0) {
+      doip_tcp_message.SetPayloadLength(doip_tcp_message.payload_length_, true);
+      int bytes = this->SocketReadPayload(socket, doip_tcp_message);
+      if (bytes != 0) {
+        continue;
+      } else {
+        switch (doip_tcp_message.payload_type_) {
+          case DoIpPayload::kRoutingActivationResponse: {
+            timer->Stop();
+            if (GetByte(doip_tcp_message.payload_, 3) != 0x10) {
+              CPRINT("Routing Activation ERROR.");
+              CloseTcpConnection();
+              break;
+            }
+            route_respone = true;
+            break;
+          }
+          case DoIpPayload::kDiagnosticAck: {
+            diagnostic_msg_ack = true;
+            break;
+          }
+          case DoIpPayload::kDiagnosticNack: {
+            break;
+          }
+          case DoIpPayload::kDiagnosticMessage: {
+            timer->Stop();
+            if (diag_msg_cb_) {
+              diag_msg_cb_(doip_tcp_message.payload_.data() + 4,
+                           doip_tcp_message.payload_.size() - 4);
+            }
+          }
+          default:
+            break;
+        }
+      }
+    }
+  }
 }
 
 int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
@@ -373,33 +448,40 @@ int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
   }
   if (bytesReceived < ((ssize_t)kDoIp_HeaderTotal_length)) {
     CPRINT(" Incomplete DoIp Header received.");
-    throw std::runtime_error("Incomplete DoIp Header received.");
     return -1;
   }
 
   if (bytesReceived > ((ssize_t)kDoIp_HeaderTotal_length)) {
     CPRINT("Extra Payload bytes read for DoIp Packet.");
-    throw std::runtime_error("Extra Payload bytes read for DoIp Packet.");
     return -1;
   }
 
-  return 0;
+  return bytesReceived;
 }
 
 int DoIpClient::SocketReadPayload(int socket, DoIpPacket &doip_packet) {
   DoIpPacket::PayloadLength buffer_fill(0);
 
-  while (buffer_fill < doip_packet.payload_.size()) {
+  while ((buffer_fill < doip_packet.payload_.size()) && timer->IsRunning()) {
     ssize_t bytedRead{recv(socket, &(doip_packet.payload_.at(buffer_fill)),
                            (doip_packet.payload_.size() - buffer_fill), 0)};
     if (bytedRead < 0) {
+      if ((errno == EWOULDBLOCK) || (errno == EAGAIN) || (errno == EINTR)) {
+        continue;
+      }
       CPRINT("recv ERROR :" + std::to_string(errno));
-      return -1;
+      break;
+    }
+    if (bytedRead == 0) {
+      break;
     }
     buffer_fill += bytedRead;
   };
+  if (buffer_fill != doip_packet.payload_.size()) {
+    CPRINT("ERROR: recv 超时！");
+    return -1;
+  }
   return 0;
-
 }
 
 int DoIpClient::SendVehicleIdentificationRequest(
@@ -426,12 +508,25 @@ int DoIpClient::SendVehicleIdentificationRequest(
   }
   DoIpPacket vehicle_Id_request(DoIpPacket::kHost);
   vehicle_Id_request.ConstructVehicleIdentificationRequest();
-  vehicle_Id_request.SetPayloadType(DoIpPayload::kVehicleIdentificationRequest);
-  vehicle_Id_request.SetPayloadLength(0);
+  // vehicle_Id_request.SetPayloadType(DoIpPayload::kVehicleIdentificationRequest);
+  // vehicle_Id_request.SetPayloadLength(0);
 
   int re = SocketWrite(udp_socket, vehicle_Id_request, destination_address);
   if (0 == re)
     return 0;
   else
     return -1;
+}
+
+
+void DoIpClient::SetCallBack(DiagnosticMessageCallBack diag_msg_cb) {
+  diag_msg_cb_ = diag_msg_cb;
+}
+
+int DoIpClient::SendRoutingActivationRequest(uint16_t source_address) {
+  if (tcp_socket_ < 0) {
+    CPRINT("TCP socket is error.");
+    return -1;
+  }
+
 }

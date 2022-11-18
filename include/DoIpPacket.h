@@ -5,6 +5,7 @@
 #include <array>
 
 #include "Payload.h"
+#include "UdsMessage.h"
 
 enum DoIpProtocolVersions : uint8_t {
   kDoIpIsoDis13400_2_2010 = 0x01,
@@ -13,6 +14,7 @@ enum DoIpProtocolVersions : uint8_t {
   kVIDRequest = 0xFF
 };
 
+static const ByteVector kRoutingActivationRequestData = {0x00, 0x00, 0x00, 0x00, 0x00, 0x12, 0x34, 0x56, 0x78};
 /**
  * \brief DoIP协议版本
  */
@@ -197,8 +199,9 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
   ByteVector GetEID();
   ByteVector GetGID();
   uint8_t GetFurtherActionRequied();
-  int ConstructVehicleIdentificationRequest();
-
+  void ConstructVehicleIdentificationRequest();
+  void ConstructRoutingActivationRequest(uint16_t source_address);
+  void ConstructDiagnosticMessage(uint16_t source_address, uint16_t target_address, ByteVector user_data);
   ScatterArray GetScatterArray();
 };
 

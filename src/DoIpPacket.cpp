@@ -1,5 +1,4 @@
 #include "DoIpPacket.h"
-
 #include <netinet/in.h>
 
 #include "MultiByteType.h"
@@ -133,9 +132,35 @@ DoIpPacket::ScatterArray DoIpPacket::GetScatterArray() {
   return scatter_array;
 }
 
-int DoIpPacket::ConstructVehicleIdentificationRequest() {
+void DoIpPacket::ConstructVehicleIdentificationRequest() {
   SetProtocolVersion(DoIpProtocolVersions::kVIDRequest);
+  SetPayloadType(DoIpPayload::kVehicleIdentificationRequest);
+  SetPayloadLength(0);
 }
+
+void DoIpPacket::ConstructRoutingActivationRequest(uint16_t source_address) {
+  SetProtocolVersion(DoIpProtocolVersions::kDoIpIsoDis13400_2_2012);
+  SetPayloadType(DoIpPayload::kRoutingActivationRequest);
+  SetPayloadLength(0x000B);
+  payload_.reserve(payload_length_);
+  payload_.at(0) = GetByte(source_address, 0);
+  payload_.at(1) = GetByte(source_address, 1);
+  payload_.insert(payload_.end(), kRoutingActivationRequestData.begin(), kRoutingActivationRequestData.end());
+}
+
+void DoIpPacket::ConstructDiagnosticMessage(uint16_t source_address, uint16_t target_address, ByteVector user_data) {
+  SetProtocolVersion(DoIpProtocolVersions::kDoIpIsoDis13400_2_2012);
+  SetPayloadType(DoIpPayload::kDiagnosticMessage);
+  SetPayloadLength(static_cast<uint32_t>(2+2+user_data.size()));
+  payload_.reserve(payload_length_);
+  payload_.at(0) = GetByte(source_address, 0);
+  payload_.at(1) = GetByte(source_address, 1);
+  payload_.at(2) = GetByte(target_address, 0);
+  payload_.at(3) = GetByte(target_address, 1);
+  payload_.insert(payload_.end(), user_data.begin(), user_data.end());
+}
+
+
 
 void DoIpPacket::SetPayloadType(uint8_t u_1, uint8_t u_2) {
   PayloadType type;
