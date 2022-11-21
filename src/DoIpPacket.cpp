@@ -1,6 +1,6 @@
 #include "DoIpPacket.h"
 #include <netinet/in.h>
-
+#include <iostream>
 #include "MultiByteType.h"
 
 DoIpPacket::DoIpPacket(const DoIpPacket::ByteOrder byte_order)
@@ -143,9 +143,16 @@ void DoIpPacket::ConstructRoutingActivationRequest(uint16_t source_address) {
   SetPayloadType(DoIpPayload::kRoutingActivationRequest);
   SetPayloadLength(0x000B);
   payload_.reserve(payload_length_);
-  payload_.at(0) = GetByte(source_address, 0);
-  payload_.at(1) = GetByte(source_address, 1);
-  payload_.insert(payload_.end(), kRoutingActivationRequestData.begin(), kRoutingActivationRequestData.end());
+  // std::cout << "source address: " << source_address << std::endl;
+  payload_.at(0) = GetByte(source_address, 1);
+  payload_.at(1) = GetByte(source_address, 0);
+  payload_.insert(payload_.begin() + 2, kRoutingActivationRequestData.begin(), kRoutingActivationRequestData.end());
+  payload_.erase(payload_.begin() + 11, payload_.end());
+  // printf("payload size: %d\n",payload_.size());
+  // for (auto x : payload_) {
+  //   printf("0x%02x ", x);
+  // }
+  // printf("\n");
 }
 
 void DoIpPacket::ConstructDiagnosticMessage(uint16_t source_address, uint16_t target_address, ByteVector user_data) {
@@ -168,4 +175,21 @@ void DoIpPacket::SetPayloadType(uint8_t u_1, uint8_t u_2) {
 
   payload_type_ = type;
     // printf("type: 0x%04x\n",payload_type_);
+}
+
+void DoIpPacket::PrintPacketByte(){
+  printf("PrintPacketByte: \n");
+  ByteVector packet_header;
+  packet_header.push_back(protocol_version_);
+  packet_header.push_back(inv_protocol_version_);
+  packet_header.push_back(GetByte(payload_type_, 1));
+  packet_header.push_back(GetByte(payload_type_, 0));
+  for (int i = 3; i >= 0; i --) packet_header.push_back(GetByte(payload_length_,i));
+  for (auto x : packet_header) {
+    printf("0x%02x ",x);
+  }
+  for (auto x : payload_) {
+    printf("0x%02x ",x);
+  }
+  printf("\n");
 }

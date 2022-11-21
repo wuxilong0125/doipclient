@@ -12,7 +12,7 @@ uint8_t GetByte(const T& value, size_t byte_offset) {
   if (byte_offset >= sizeof(T)) {
     throw std::out_of_range("MultiByteType byte_offset out of range");
   }
-  return ((value >> byte_offset * 8) & 0xFF);
+  return ((value >> (byte_offset * 8)) & 0xFF);
 }
 
 /**

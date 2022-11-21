@@ -11,12 +11,12 @@
 #include "CTimer.h"
 #include "MultiByteType.h"
 
-// #define DEBUG
+#define DEBUG
 #ifndef DEBUG
 #define DEBUG(info) printf(info)
 #endif
 
-// #define PRINT
+#define PRINT
 #ifndef PRINT
 #define PRINT(info_1, info_2) printf(info_1, info_2)
 #endif
@@ -198,6 +198,7 @@ int DoIpClient::UdpHandler(int &udp_socket) {
       vehicle_ip_ = client_addr;
       VIN = udp_packet.GetVIN();
       LogicalAddress_ = udp_packet.GetLogicalAddress();
+      target_address_ = (LogicalAddress_.at(0) << 8) + LogicalAddress_.at(0);
       EID = udp_packet.GetEID();
       GID = udp_packet.GetGID();
       FurtherActionRequired_ = udp_packet.GetFurtherActionRequied();
@@ -213,6 +214,7 @@ int DoIpClient::UdpHandler(int &udp_socket) {
 }
 
 int DoIpClient::TcpHandler() {
+  CPRINT("run---------");
   if (inet_ntoa(vehicle_ip_.sin_addr) == nullptr) {
     DEBUG("Get ServerIP ERROR.\n");
     return -1;
@@ -234,7 +236,7 @@ int DoIpClient::TcpHandler() {
                                       tcp_socket_);
   handle_of_tcp_thread_ = receive_tcp_msg_thread_.native_handle();
   receive_tcp_msg_thread_.detach();
-
+  CPRINT("end---------");
   return 0;
 }
 
@@ -294,6 +296,7 @@ uint8_t DoIpClient::HandleUdpMessage(uint8_t msg[], ssize_t bytes_available,
 }
 
 int DoIpClient::HandleTcpMessage(int socket) {
+  CPRINT("run-----");
   if (socket < 0) {
     CPRINT("ERROR : No Tcp Socket set.");
     return -1;
@@ -303,8 +306,10 @@ int DoIpClient::HandleTcpMessage(int socket) {
     DoIpPacket doip_tcp_message(DoIpPacket::kNetWork);
 
     int re = SocketReadHeader(socket, doip_tcp_message);
+    doip_tcp_message.Ntoh();
     if (re == -1) {
       CPRINT("SocketReadHeader is ERROR.");
+      return -1;
       continue;
     }
     if (0 == re) {
@@ -320,24 +325,32 @@ int DoIpClient::HandleTcpMessage(int socket) {
       continue;
     }
     uint8_t v_code = doip_tcp_message.VerifyPayloadType();
+    // printf("v_code: 0x%02x\n", v_code);
     if (v_code != 0xFF) {
       CPRINT("PayloadType ERROR: " + std::to_string(v_code));
       continue;
     }
     if (doip_tcp_message.payload_length_ != 0) {
+      CPRINT("111");
       doip_tcp_message.SetPayloadLength(doip_tcp_message.payload_length_, true);
-      int bytes = this->SocketReadPayload(socket, doip_tcp_message);
+      CPRINT("2222");
+      int bytes = SocketReadPayload(socket, doip_tcp_message);
+      CPRINT("3333");
       if (bytes != 0) {
+        printf("bytes: %d\n",bytes);
         continue;
       } else {
+        printf("bytes: %d\n",bytes);
         switch (doip_tcp_message.payload_type_) {
           case DoIpPayload::kRoutingActivationResponse: {
+            CPRINT("kRoutingActivationResponse");
             timer->Stop();
-            if (GetByte(doip_tcp_message.payload_, 3) != 0x10) {
+            if (doip_tcp_message.payload_.at(4) != 0x10) {
               CPRINT("Routing Activation ERROR.");
               CloseTcpConnection();
               break;
             }
+            CPRINT("route_respone is true!");
             route_respone = true;
             break;
           }
@@ -365,6 +378,7 @@ int DoIpClient::HandleTcpMessage(int socket) {
 
 int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
                             struct sockaddr_in *destination_address) {
+  CPRINT("run--------------");
   if (socket < 0) {
     DEBUG("SocketWrite's socket param ERROR.\n");
     return -1;
@@ -380,12 +394,14 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
   struct msghdr message_header;
 
   if (destination_address != nullptr) {
-    PRINT("broadaddr: %s \n", inet_ntoa(destination_address->sin_addr));
+    printf("broadaddr: %s \n", inet_ntoa(destination_address->sin_addr));
     message_header.msg_name = destination_address;
     message_header.msg_namelen = sizeof(sockaddr_in);
   } else {
-    message_header.msg_name = NULL;
-    message_header.msg_namelen = 0;
+    CPRINT("destination_address is null.");
+    return -1;
+    // message_header.msg_name = NULL;
+    // message_header.msg_namelen = 0;
   }
   message_header.msg_iov = scatter_array.begin();
   message_header.msg_iovlen = scatter_array.size();
@@ -397,7 +413,7 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
   doip_packet.Hton();
 
   ssize_t bytesSent{sendmsg(socket, &message_header, 0)};
-
+  // printf("bytesSent: %d\n",bytesSent);
   doip_packet.Ntoh();
 
   if (bytesSent < 0) {
@@ -419,10 +435,13 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
     DEBUG("SocketWrite bytesSent is smaller than packet Length.\n");
     return -1;
   }  // else we are happy.
+
+  CPRINT("end--------------");
   return 0;
 }
 
 int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
+  CPRINT("run---------");
   doip_packet.Ntoh();
   doip_packet.SetPayloadLength(0);
   DoIpPacket::PayloadLength expected_payload_length{
@@ -441,7 +460,8 @@ int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
   doip_packet.Hton();
 
   ssize_t bytesReceived{recvmsg(socket, &message_header, 0)};
-
+  printf("bytesReceived: %d\n", bytesReceived);
+  if (bytesReceived == 0) return 0;
   if (bytesReceived < 0) {
     CPRINT("ERROR: " + std::to_string(errno));
     return -1;
@@ -460,11 +480,19 @@ int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
 }
 
 int DoIpClient::SocketReadPayload(int socket, DoIpPacket &doip_packet) {
+  CPRINT("run-----");
+  if (socket < 0) {
+    CPRINT("socket is error");
+    return -1;
+  }
   DoIpPacket::PayloadLength buffer_fill(0);
-
+  printf("payload size: %d\n",doip_packet.payload_.size());
   while ((buffer_fill < doip_packet.payload_.size()) && timer->IsRunning()) {
+    CPRINT("recv strart-----");
     ssize_t bytedRead{recv(socket, &(doip_packet.payload_.at(buffer_fill)),
                            (doip_packet.payload_.size() - buffer_fill), 0)};
+    printf("bytedRead: %d\n",bytedRead);
+    CPRINT("recv end--------");
     if (bytedRead < 0) {
       if ((errno == EWOULDBLOCK) || (errno == EAGAIN) || (errno == EINTR)) {
         continue;
@@ -518,15 +546,82 @@ int DoIpClient::SendVehicleIdentificationRequest(
     return -1;
 }
 
-
 void DoIpClient::SetCallBack(DiagnosticMessageCallBack diag_msg_cb) {
   diag_msg_cb_ = diag_msg_cb;
 }
 
-int DoIpClient::SendRoutingActivationRequest(uint16_t source_address) {
+int DoIpClient::SendRoutingActivationRequest() {
+  CPRINT("run----------");
   if (tcp_socket_ < 0) {
     CPRINT("TCP socket is error.");
     return -1;
   }
+  DoIpPacket routeing_act_req(DoIpPacket::kHost);
+  routeing_act_req.ConstructRoutingActivationRequest(source_address_);
+  if (route_respone) {
+    route_respone = false;
+  }
+  CTimer::Clock::duration timeout = std::chrono::seconds(2);
+  timer->StartOnce(timeout, true);
+  // routeing_act_req.PrintPacketByte();
+  int re = SocketWrite(tcp_socket_, routeing_act_req, &vehicle_ip_);
+  // printf("re: %d\n",re);
+  if (-1 == re) {
+    timer->Stop();
+    return -1;
+  }
 
+  useconds_t inter_us = 200;
+  while (!GetIsRouteResponse() && timer->IsRunning()) {
+    usleep(inter_us);
+  }
+
+  sleep(5);
+  if (route_respone) {
+    route_respone = false;
+    CPRINT("Routing Activation successful.");
+  } else {
+    CPRINT("RoutingActivationResponse timeout.");
+    return -1;
+  }
+
+  return 0;
 }
+
+int DoIpClient::SendDiagnosticMessage(ByteVector user_data) {
+  if (tcp_socket_ < 0) {
+    CPRINT("TCP socket is error.");
+    return -1;
+  }
+  DoIpPacket diagnostic_msg(DoIpPacket::kHost);
+  diagnostic_msg.ConstructDiagnosticMessage(source_address_, target_address_,
+                                            user_data);
+  CTimer::Clock::duration timeout = std::chrono::seconds(2);
+  if (diagnostic_msg_ack) {
+    diagnostic_msg_ack = false;
+  }
+  timer->StartOnce(timeout);
+  int re = SocketWrite(tcp_socket_, diagnostic_msg, &vehicle_ip_);
+  if (-1 == re) {
+    timer->Stop();
+    return -1;
+  }
+
+  useconds_t inter_us = 100;
+  while (!GetIsDiagnosticAck() && timer->IsRunning()) {
+    usleep(inter_us);
+  }
+
+  if (GetIsDiagnosticAck()) {
+    diagnostic_msg_ack = false;
+  } else {
+    CPRINT("DiagnosticMessage ACK timeout.");
+    return -1;
+  }
+  return 0;
+}
+
+bool DoIpClient::GetIsRouteResponse() { return route_respone; };
+bool DoIpClient::GetIsDiagnosticAck() { return diagnostic_msg_ack; };
+
+void DoIpClient::SetSourceAddress(uint16_t s_addr) { source_address_ = s_addr; }

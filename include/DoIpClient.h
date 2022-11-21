@@ -24,7 +24,6 @@ static const int kTimeToSleep = 200;  // milliseconds
 class DoIpClient {
  private:
   struct sockaddr_in vehicle_ip_;
-
   int tcp_socket_ = -1;
   int udp_socket_ = -1;
   std::string server_ip_prefix_ = "169.254.";
@@ -43,7 +42,7 @@ class DoIpClient {
   DiagnosticMessageCallBack diag_msg_cb_;
   int reconnect_tcp_counter_;
   std::atomic<int> route_respone{false}, diagnostic_msg_ack{false};
-
+  uint16_t source_address_, target_address_;
  public:
   DoIpClient();
   ~DoIpClient();
@@ -67,10 +66,13 @@ class DoIpClient {
   void TimerCallBack(bool socket);
   void CloseTcpConnection();
   void ReconnectServer();
-  inline void SetCallBack(DiagnosticMessageCallBack diag_msg_cb);
-  int SendRoutingActivationRequest(uint16_t source_address);
-  int SendDiagnosticMessage(uint16_t target_address, uint8_t *user_data, int data_length);
-  
+  void SetCallBack(DiagnosticMessageCallBack diag_msg_cb);
+  int SendRoutingActivationRequest();
+  int SendDiagnosticMessage(ByteVector user_data);
+  bool GetIsRouteResponse();
+  bool GetIsDiagnosticAck();
+  void SetSourceAddress(uint16_t s_addr);
+  void SetTargetAddress();
 
 };
 #endif

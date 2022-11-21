@@ -160,7 +160,7 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
 
  public:
   PayloadType payload_type_;
-  PayloadType payload_length_;
+  PayloadLength payload_length_;
 
   explicit DoIpPacket(const ByteOrder byte_order_);
   virtual ~DoIpPacket();
@@ -203,6 +203,7 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
   void ConstructRoutingActivationRequest(uint16_t source_address);
   void ConstructDiagnosticMessage(uint16_t source_address, uint16_t target_address, ByteVector user_data);
   ScatterArray GetScatterArray();
+  void PrintPacketByte();
 };
 
 #endif
