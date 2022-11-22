@@ -198,7 +198,13 @@ int DoIpClient::UdpHandler(int &udp_socket) {
       vehicle_ip_ = client_addr;
       VIN = udp_packet.GetVIN();
       LogicalAddress_ = udp_packet.GetLogicalAddress();
-      target_address_ = (LogicalAddress_.at(0) << 8) + LogicalAddress_.at(0);
+      printf("LogicalAddress_:");
+      for (auto x : LogicalAddress_) {
+        printf("0x%02x ", x);
+      }
+      printf("\n");
+      target_address_ = (LogicalAddress_.at(0) << 8) + LogicalAddress_.at(1);
+
       EID = udp_packet.GetEID();
       GID = udp_packet.GetGID();
       FurtherActionRequired_ = udp_packet.GetFurtherActionRequied();
@@ -303,10 +309,12 @@ int DoIpClient::HandleTcpMessage(int socket) {
   }
 
   while (true) {
-    DoIpPacket doip_tcp_message(DoIpPacket::kNetWork);
+    DoIpPacket doip_tcp_message(DoIpPacket::kHost);
 
     int re = SocketReadHeader(socket, doip_tcp_message);
     doip_tcp_message.Ntoh();
+    // doip_tcp_message.PrintPacketByte();
+    printf("tcp_message type: 0x%04x\n", doip_tcp_message.payload_type_);
     if (re == -1) {
       CPRINT("SocketReadHeader is ERROR.");
       return -1;
@@ -331,16 +339,18 @@ int DoIpClient::HandleTcpMessage(int socket) {
       continue;
     }
     if (doip_tcp_message.payload_length_ != 0) {
-      CPRINT("111");
+      // CPRINT("111");
       doip_tcp_message.SetPayloadLength(doip_tcp_message.payload_length_, true);
-      CPRINT("2222");
-      int bytes = SocketReadPayload(socket, doip_tcp_message);
-      CPRINT("3333");
-      if (bytes != 0) {
-        printf("bytes: %d\n",bytes);
+      // CPRINT("2222");
+      int re = SocketReadPayload(socket, doip_tcp_message);
+
+      // CPRINT("3333");
+      if (re != 0) {
+        printf("re: %d\n", re);
         continue;
       } else {
-        printf("bytes: %d\n",bytes);
+        printf("re: %d\n", re);
+
         switch (doip_tcp_message.payload_type_) {
           case DoIpPayload::kRoutingActivationResponse: {
             CPRINT("kRoutingActivationResponse");
@@ -355,6 +365,7 @@ int DoIpClient::HandleTcpMessage(int socket) {
             break;
           }
           case DoIpPayload::kDiagnosticAck: {
+            CPRINT("---DiagnosticAck---");
             diagnostic_msg_ack = true;
             break;
           }
@@ -362,6 +373,7 @@ int DoIpClient::HandleTcpMessage(int socket) {
             break;
           }
           case DoIpPayload::kDiagnosticMessage: {
+            CPRINT("---DiagnosticMessage---");
             timer->Stop();
             if (diag_msg_cb_) {
               diag_msg_cb_(doip_tcp_message.payload_.data() + 4,
@@ -441,8 +453,8 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
 }
 
 int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
-  CPRINT("run---------");
-  doip_packet.Ntoh();
+  CPRINT("run");
+  // doip_packet.Ntoh();
   doip_packet.SetPayloadLength(0);
   DoIpPacket::PayloadLength expected_payload_length{
       doip_packet.payload_length_};
@@ -486,12 +498,12 @@ int DoIpClient::SocketReadPayload(int socket, DoIpPacket &doip_packet) {
     return -1;
   }
   DoIpPacket::PayloadLength buffer_fill(0);
-  printf("payload size: %d\n",doip_packet.payload_.size());
+  printf("payload size: %d\n", doip_packet.payload_.size());
   while ((buffer_fill < doip_packet.payload_.size()) && timer->IsRunning()) {
     CPRINT("recv strart-----");
     ssize_t bytedRead{recv(socket, &(doip_packet.payload_.at(buffer_fill)),
                            (doip_packet.payload_.size() - buffer_fill), 0)};
-    printf("bytedRead: %d\n",bytedRead);
+    printf("bytedRead: %d\n", bytedRead);
     CPRINT("recv end--------");
     if (bytedRead < 0) {
       if ((errno == EWOULDBLOCK) || (errno == EAGAIN) || (errno == EINTR)) {
@@ -536,9 +548,6 @@ int DoIpClient::SendVehicleIdentificationRequest(
   }
   DoIpPacket vehicle_Id_request(DoIpPacket::kHost);
   vehicle_Id_request.ConstructVehicleIdentificationRequest();
-  // vehicle_Id_request.SetPayloadType(DoIpPayload::kVehicleIdentificationRequest);
-  // vehicle_Id_request.SetPayloadLength(0);
-
   int re = SocketWrite(udp_socket, vehicle_Id_request, destination_address);
   if (0 == re)
     return 0;
@@ -576,7 +585,7 @@ int DoIpClient::SendRoutingActivationRequest() {
     usleep(inter_us);
   }
 
-  sleep(5);
+  // sleep(5);
   if (route_respone) {
     route_respone = false;
     CPRINT("Routing Activation successful.");

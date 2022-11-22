@@ -150,7 +150,7 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
 
   ByteOrder byte_order_;
 
-  typedef int16_t PayloadType;
+  typedef uint16_t PayloadType;
   typedef uint8_t ProtocolVersion;
   typedef uint16_t AddressType;
 
