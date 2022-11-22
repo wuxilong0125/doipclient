@@ -21,12 +21,12 @@
 #define PRINT(info_1, info_2) printf(info_1, info_2)
 #endif
 
-// #define CPRINT
+#define CPRINT
 #ifndef CPRINT
 #define CPRINT(x) std::cout << "[" << __FUNCTION__ << "]" << x << std::endl;
 #endif
 
-// #define PRINT_V
+#define PRINT_V
 #ifndef PRINT_V
 #define PRINT_V(_1, _2, _3) \
   printf(_1);               \
@@ -198,11 +198,7 @@ int DoIpClient::UdpHandler(int &udp_socket) {
       vehicle_ip_ = client_addr;
       VIN = udp_packet.GetVIN();
       LogicalAddress_ = udp_packet.GetLogicalAddress();
-      printf("LogicalAddress_:");
-      for (auto x : LogicalAddress_) {
-        printf("0x%02x ", x);
-      }
-      printf("\n");
+
       target_address_ = (LogicalAddress_.at(0) << 8) + LogicalAddress_.at(1);
 
       EID = udp_packet.GetEID();
@@ -273,9 +269,9 @@ uint8_t DoIpClient::HandleUdpMessage(uint8_t msg[], ssize_t bytes_available,
   if ((uint8_t)(~msg[kDoIp_ProtocolVersion_offset]) !=
       msg[kDoIp_InvProtocolVersion_offset]) {
     udp_packet.SetPayloadType(DoIpPayload::kGenericDoIpNack);
-    printf("ProtocolVersion is 0x%02x\n",
-           (uint8_t)(~msg[kDoIp_ProtocolVersion_offset]));
-    printf("InvProtocolVersion is 0x%02x\n", msg[1]);
+    // printf("ProtocolVersion is 0x%02x\n",
+    //        (uint8_t)(~msg[kDoIp_ProtocolVersion_offset]));
+    // printf("InvProtocolVersion is 0x%02x\n", msg[1]);
     DEBUG("HandleUdpMessage_f: ProtocolVersion not equal to ProtocolVersion\n");
     return DoIpNackCodes::kIncorrectPatternFormat;
   }
@@ -313,8 +309,6 @@ int DoIpClient::HandleTcpMessage(int socket) {
 
     int re = SocketReadHeader(socket, doip_tcp_message);
     doip_tcp_message.Ntoh();
-    // doip_tcp_message.PrintPacketByte();
-    printf("tcp_message type: 0x%04x\n", doip_tcp_message.payload_type_);
     if (re == -1) {
       CPRINT("SocketReadHeader is ERROR.");
       return -1;
@@ -333,7 +327,7 @@ int DoIpClient::HandleTcpMessage(int socket) {
       continue;
     }
     uint8_t v_code = doip_tcp_message.VerifyPayloadType();
-    // printf("v_code: 0x%02x\n", v_code);
+
     if (v_code != 0xFF) {
       CPRINT("PayloadType ERROR: " + std::to_string(v_code));
       continue;
@@ -346,10 +340,10 @@ int DoIpClient::HandleTcpMessage(int socket) {
 
       // CPRINT("3333");
       if (re != 0) {
-        printf("re: %d\n", re);
+
         continue;
       } else {
-        printf("re: %d\n", re);
+
 
         switch (doip_tcp_message.payload_type_) {
           case DoIpPayload::kRoutingActivationResponse: {
@@ -406,7 +400,7 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
   struct msghdr message_header;
 
   if (destination_address != nullptr) {
-    printf("broadaddr: %s \n", inet_ntoa(destination_address->sin_addr));
+    // printf("broadaddr: %s \n", inet_ntoa(destination_address->sin_addr));
     message_header.msg_name = destination_address;
     message_header.msg_namelen = sizeof(sockaddr_in);
   } else {
@@ -472,7 +466,7 @@ int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
   doip_packet.Hton();
 
   ssize_t bytesReceived{recvmsg(socket, &message_header, 0)};
-  printf("bytesReceived: %d\n", bytesReceived);
+  // printf("bytesReceived: %d\n", bytesReceived);
   if (bytesReceived == 0) return 0;
   if (bytesReceived < 0) {
     CPRINT("ERROR: " + std::to_string(errno));
@@ -498,12 +492,12 @@ int DoIpClient::SocketReadPayload(int socket, DoIpPacket &doip_packet) {
     return -1;
   }
   DoIpPacket::PayloadLength buffer_fill(0);
-  printf("payload size: %d\n", doip_packet.payload_.size());
+  // printf("payload size: %d\n", doip_packet.payload_.size());
   while ((buffer_fill < doip_packet.payload_.size()) && timer->IsRunning()) {
     CPRINT("recv strart-----");
     ssize_t bytedRead{recv(socket, &(doip_packet.payload_.at(buffer_fill)),
                            (doip_packet.payload_.size() - buffer_fill), 0)};
-    printf("bytedRead: %d\n", bytedRead);
+    // printf("bytedRead: %d\n", bytedRead);
     CPRINT("recv end--------");
     if (bytedRead < 0) {
       if ((errno == EWOULDBLOCK) || (errno == EAGAIN) || (errno == EINTR)) {
