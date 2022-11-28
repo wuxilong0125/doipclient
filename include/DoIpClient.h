@@ -1,6 +1,7 @@
 #ifndef __DO_IP_CLIENT_H__
 #define __DO_IP_CLIENT_H__
 #include <netinet/in.h>
+#include <unistd.h>
 
 #include <array>
 #include <atomic>
@@ -8,7 +9,6 @@
 #include <mutex>
 #include <queue>
 #include <string>
-#include <unistd.h>
 #include <thread>
 
 #include "CTimer.h"
@@ -43,36 +43,100 @@ class DoIpClient {
   int reconnect_tcp_counter_;
   std::atomic<int> route_respone{false}, diagnostic_msg_ack{false};
   uint16_t source_address_, target_address_;
+
  public:
   DoIpClient();
   ~DoIpClient();
-  void start();
+  /**
+   * @brief 获取所有本机的IP地址
+   */
   int GetAllLocalIps();
+  /**
+   * @brief 查找目标车辆IP地址
+   */
+  int FindTargetVehicleAddress();
+  /**
+   * @brief 接收处理TCP数据报
+   */
   int HandleTcpMessage(int tcp_socket);
-  inline void SetServerIpPrefix(std::string ip) { server_ip_prefix_ = ip; }
-  int SetUdpSocket(const char *ip, int &udpSockFd);
-  int UdpHandler(int &udp_socket);
+  /**
+   * @brief 处理TCP连接
+   */
   int TcpHandler();
+  /**
+   * @brief 关闭TCP连接
+   */
+  void CloseTcpConnection();
+  /**
+   * @brief TCP重连
+   */
+  void ReconnectServer();
+  /**
+   * @brief 设置目标服务的IP前缀
+   */
+  inline void SetServerIpPrefix(std::string ip) { server_ip_prefix_ = ip; }
+  /**
+   * @brief 设置UDP套接字
+   */
+  int SetUdpSocket(const char *ip, int &udpSockFd);
+  /**
+   * @brief 处理UDP连接
+   */
+  int UdpHandler(int &udp_socket);
+
+  /**
+   * @brief 接收处理UDP数据报
+   */
   uint8_t HandleUdpMessage(uint8_t msg[], ssize_t length,
                            DoIpPacket &udp_packet);
 
-  int SendVehicleIdentificationRequest(struct sockaddr_in *destination_address,
-                                       int udp_socket);
+  /**
+   * @brief 封装发送数据报功能
+   */
   int SocketWrite(int socket, DoIpPacket &doip_packet,
                   struct sockaddr_in *destination_address);
+  /**
+   * @brief 封装接收数据报头部功能
+   */
   int SocketReadHeader(int socket, DoIpPacket &doip_packet);
+  /**
+   * @brief 封装接收数据报负载功能
+   */
   int SocketReadPayload(int socket, DoIpPacket &doip_packet);
-  int FindTargetVehicleAddress();
-  void TimerCallBack(bool socket);
-  void CloseTcpConnection();
-  void ReconnectServer();
-  void SetCallBack(DiagnosticMessageCallBack diag_msg_cb);
-  int SendRoutingActivationRequest();
-  int SendDiagnosticMessage(ByteVector user_data);
-  bool GetIsRouteResponse();
-  bool GetIsDiagnosticAck();
-  void SetSourceAddress(uint16_t s_addr);
-  void SetTargetAddress();
 
+  /**
+   * @brief 计时器回调函数
+   */
+  void TimerCallBack(bool socket);
+
+  /**
+   * @brief 设置回调函数
+   */
+  void SetCallBack(DiagnosticMessageCallBack diag_msg_cb);
+  /**
+   * @brief 发送车辆识别请求报文
+   */
+  int SendVehicleIdentificationRequest(struct sockaddr_in *destination_address,
+                                       int udp_socket);
+  /**
+   * @brief 发送路由激活请求
+   */
+  int SendRoutingActivationRequest();
+  /**
+   * @brief 发送诊断数据报
+   */
+  int SendDiagnosticMessage(ByteVector user_data);
+  /**
+   * @brief 获取路由回复状态
+   */
+  bool GetIsRouteResponse();
+  /**
+   * @brief 获取诊断肯定请求状态
+   */
+  bool GetIsDiagnosticAck();
+  /**
+   * @brief 设置数据报源地址
+   */
+  void SetSourceAddress(uint16_t s_addr);
 };
 #endif

@@ -166,19 +166,14 @@ int DoIpClient::SetUdpSocket(const char *ip, int &udpSockFd) {
  * @return int
  */
 int DoIpClient::UdpHandler(int &udp_socket) {
-  PRINT("UdpHandler socket: %d\n", udp_socket);
   uint8_t received_udp_datas[kMaxDataSize];
   struct sockaddr_in client_addr;
   client_addr.sin_family = AF_INET;
   client_addr.sin_port = htons(kPort);
   client_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   socklen_t length(sizeof(struct sockaddr));
-  DEBUG("recvfrom start: \n");
   ssize_t bytes_received{recvfrom(udp_socket, received_udp_datas, kMaxDataSize,
                                   0, (struct sockaddr *)&client_addr, &length)};
-  DEBUG("recvfrom end!\n");
-
-  PRINT("received_udp_datas length: %d\n", bytes_received);
   if (bytes_received <= 0) {
     PRINT("recvfrom error: %d\n", errno);
     return -1;
@@ -189,8 +184,6 @@ int DoIpClient::UdpHandler(int &udp_socket) {
 
   DoIpPacket udp_packet(DoIpPacket::kHost);
   uint8_t re = HandleUdpMessage(received_udp_datas, bytes_received, udp_packet);
-  PRINT("HandleUdpMessage return value is : 0x%02x\n", re);
-  PRINT("udp packet type is : 0x%04x\n", udp_packet.payload_type_);
   if (0xFF == re &&
       udp_packet.payload_type_ == DoIpPayload::kVehicleAnnouncement) {
     if (udp_socket_ == -1) {
@@ -198,23 +191,17 @@ int DoIpClient::UdpHandler(int &udp_socket) {
       vehicle_ip_ = client_addr;
       VIN = udp_packet.GetVIN();
       LogicalAddress_ = udp_packet.GetLogicalAddress();
-
       target_address_ = (LogicalAddress_.at(0) << 8) + LogicalAddress_.at(1);
-
       EID = udp_packet.GetEID();
       GID = udp_packet.GetGID();
       FurtherActionRequired_ = udp_packet.GetFurtherActionRequied();
-      PRINT("vehicle ip: %s\n", inet_ntoa(vehicle_ip_.sin_addr));
-      PRINT("VIN : %s\n", VIN.c_str());
-      PRINT_V("LogicalAddress_: 0x", LogicalAddress_, "%02x");
-      PRINT_V("EID: 0x", EID, "%02x");
-      PRINT_V("GID: 0x", GID, "%02x");
       return 0;
     }
   }
   return -1;
 }
 
+// TODO: 添加bool参数
 int DoIpClient::TcpHandler() {
   CPRINT("run---------");
   if (inet_ntoa(vehicle_ip_.sin_addr) == nullptr) {
@@ -233,6 +220,7 @@ int DoIpClient::TcpHandler() {
   if (-1 == re) {
     return -1;
   }
+  // TODO: bool参数为true 则 建立线程，每两秒钟发一个数据 负载为3e80 负载类型为8001
 
   std::thread receive_tcp_msg_thread_(&DoIpClient::HandleTcpMessage, this,
                                       tcp_socket_);
@@ -269,9 +257,6 @@ uint8_t DoIpClient::HandleUdpMessage(uint8_t msg[], ssize_t bytes_available,
   if ((uint8_t)(~msg[kDoIp_ProtocolVersion_offset]) !=
       msg[kDoIp_InvProtocolVersion_offset]) {
     udp_packet.SetPayloadType(DoIpPayload::kGenericDoIpNack);
-    // printf("ProtocolVersion is 0x%02x\n",
-    //        (uint8_t)(~msg[kDoIp_ProtocolVersion_offset]));
-    // printf("InvProtocolVersion is 0x%02x\n", msg[1]);
     DEBUG("HandleUdpMessage_f: ProtocolVersion not equal to ProtocolVersion\n");
     return DoIpNackCodes::kIncorrectPatternFormat;
   }
@@ -298,7 +283,6 @@ uint8_t DoIpClient::HandleUdpMessage(uint8_t msg[], ssize_t bytes_available,
 }
 
 int DoIpClient::HandleTcpMessage(int socket) {
-  CPRINT("run-----");
   if (socket < 0) {
     CPRINT("ERROR : No Tcp Socket set.");
     return -1;
@@ -333,18 +317,11 @@ int DoIpClient::HandleTcpMessage(int socket) {
       continue;
     }
     if (doip_tcp_message.payload_length_ != 0) {
-      // CPRINT("111");
       doip_tcp_message.SetPayloadLength(doip_tcp_message.payload_length_, true);
-      // CPRINT("2222");
       int re = SocketReadPayload(socket, doip_tcp_message);
-
-      // CPRINT("3333");
       if (re != 0) {
-
         continue;
       } else {
-
-
         switch (doip_tcp_message.payload_type_) {
           case DoIpPayload::kRoutingActivationResponse: {
             CPRINT("kRoutingActivationResponse");
@@ -384,21 +361,12 @@ int DoIpClient::HandleTcpMessage(int socket) {
 
 int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
                             struct sockaddr_in *destination_address) {
-  CPRINT("run--------------");
   if (socket < 0) {
     DEBUG("SocketWrite's socket param ERROR.\n");
     return -1;
   }
-
   DoIpPacket::ScatterArray scatter_array(doip_packet.GetScatterArray());
-  // {
-  //   for (auto a : scatter_array) {
-  //     std::cout << &(a.iov_base) << " " << a.iov_len << std::endl;
-  //   }
-  // }
-  // Use Message Header for a scattered send
   struct msghdr message_header;
-
   if (destination_address != nullptr) {
     // printf("broadaddr: %s \n", inet_ntoa(destination_address->sin_addr));
     message_header.msg_name = destination_address;
@@ -406,8 +374,6 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
   } else {
     CPRINT("destination_address is null.");
     return -1;
-    // message_header.msg_name = NULL;
-    // message_header.msg_namelen = 0;
   }
   message_header.msg_iov = scatter_array.begin();
   message_header.msg_iovlen = scatter_array.size();
@@ -424,36 +390,22 @@ int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
 
   if (bytesSent < 0) {
     PRINT("sendmsg error : %d\n", errno);
-    // Check for error or socket closed
-    // int current_errno{errno};
-    // if (IsSocketClosed(current_errno)) {
 
-    //   is_socket_open = false;
-    // } else {
-
-    // }
     return -1;
   } else if (((size_t)bytesSent) <
              (doip_packet.payload_length_ + kDoIp_HeaderTotal_length)) {
-    // Check whether insufficient data was sent
-    // throw exception::IOException();
-    // T_UTILS_PRINT("IOException ERROR");
+
     DEBUG("SocketWrite bytesSent is smaller than packet Length.\n");
     return -1;
-  }  // else we are happy.
-
-  CPRINT("end--------------");
+  } 
   return 0;
 }
 
 int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
-  CPRINT("run");
-  // doip_packet.Ntoh();
   doip_packet.SetPayloadLength(0);
   DoIpPacket::PayloadLength expected_payload_length{
       doip_packet.payload_length_};
   DoIpPacket::ScatterArray scatter_arry(doip_packet.GetScatterArray());
-
   struct msghdr message_header;
   message_header.msg_name = NULL;
   message_header.msg_namelen = 0;
@@ -462,11 +414,8 @@ int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
   message_header.msg_control = nullptr;
   message_header.msg_controllen = 0;
   message_header.msg_flags = 0;
-
   doip_packet.Hton();
-
   ssize_t bytesReceived{recvmsg(socket, &message_header, 0)};
-  // printf("bytesReceived: %d\n", bytesReceived);
   if (bytesReceived == 0) return 0;
   if (bytesReceived < 0) {
     CPRINT("ERROR: " + std::to_string(errno));
@@ -486,19 +435,14 @@ int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
 }
 
 int DoIpClient::SocketReadPayload(int socket, DoIpPacket &doip_packet) {
-  CPRINT("run-----");
   if (socket < 0) {
     CPRINT("socket is error");
     return -1;
   }
   DoIpPacket::PayloadLength buffer_fill(0);
-  // printf("payload size: %d\n", doip_packet.payload_.size());
   while ((buffer_fill < doip_packet.payload_.size()) && timer->IsRunning()) {
-    CPRINT("recv strart-----");
     ssize_t bytedRead{recv(socket, &(doip_packet.payload_.at(buffer_fill)),
                            (doip_packet.payload_.size() - buffer_fill), 0)};
-    // printf("bytedRead: %d\n", bytedRead);
-    CPRINT("recv end--------");
     if (bytedRead < 0) {
       if ((errno == EWOULDBLOCK) || (errno == EAGAIN) || (errno == EINTR)) {
         continue;

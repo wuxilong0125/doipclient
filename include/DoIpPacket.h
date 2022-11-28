@@ -165,43 +165,66 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
   explicit DoIpPacket(const ByteOrder byte_order_);
   virtual ~DoIpPacket();
 
+
+  /**
+   * @brief 设置负载长度
+   */
   void SetPayloadLength(PayloadLength payload_length,
                         bool force = false) override;
-
+  /**
+   * @brief 设置协议版本 
+   */
   inline void SetProtocolVersion(ProtocolVersion prot_version) {
     protocol_version_ = prot_version;
     inv_protocol_version_ = ~prot_version;
   }
+  /**
+   * @brief 获取协议版本
+   */
   inline ProtocolVersion GetProtocolVersion(void) {
     return (protocol_version_);
   }
+  /**
+   * @brief 获取协议版本的反码
+   */
   inline ProtocolVersion GetInverseProtocolVersion(void) {
-    return (protocol_version_);
+    return (inv_protocol_version_);
   }
-
+  /**
+   * @brief 设置负载类型
+   */
   void SetPayloadType(PayloadType type) { payload_type_ = type; }
   void SetPayloadType(uint8_t u_1, uint8_t u_2) ;
   /**
    * @brief 本地字节序(小端)转为网络字节序(大端)
-   *
    */
   void Hton();
-
   /**
    * @brief 网络字节序(大端)转为本地字节序(小端)
-   *
    */
   void Ntoh();
-
+  /**
+   * @brief 验证负载类型 
+   */
   uint8_t VerifyPayloadType();
   std::string GetVIN();
   ByteVector GetLogicalAddress();
   ByteVector GetEID();
   ByteVector GetGID();
   uint8_t GetFurtherActionRequied();
+  /**
+   * @brief 生成车辆识别请求数据报
+   */
   void ConstructVehicleIdentificationRequest();
+  /**
+   * @brief 生成路由激活请求
+   */
   void ConstructRoutingActivationRequest(uint16_t source_address);
+  /**
+   * @brief 生成诊断数据报
+   */
   void ConstructDiagnosticMessage(uint16_t source_address, uint16_t target_address, ByteVector user_data);
+
   ScatterArray GetScatterArray();
   void PrintPacketByte();
 };
