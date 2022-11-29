@@ -38,11 +38,13 @@ class DoIpClient {
   ByteVector LogicalAddress_;
   uint8_t FurtherActionRequired_;
   CTimer *timer;
-  pthread_t handle_of_tcp_thread_;
+  pthread_t handle_of_tcp_thread_, cycle_send_msg_handle_;
   DiagnosticMessageCallBack diag_msg_cb_;
   int reconnect_tcp_counter_;
   std::atomic<int> route_respone{false}, diagnostic_msg_ack{false};
   uint16_t source_address_, target_address_;
+  bool tcp_connect_force_ = false;
+
 
  public:
   DoIpClient();
@@ -59,10 +61,13 @@ class DoIpClient {
    * @brief 接收处理TCP数据报
    */
   int HandleTcpMessage(int tcp_socket);
+
+  void TcpSendMsgThread();
+  
   /**
    * @brief 处理TCP连接
    */
-  int TcpHandler();
+  int TcpHandler(bool force);
   /**
    * @brief 关闭TCP连接
    */

@@ -124,7 +124,6 @@ int DoIpClient::FindTargetVehicleAddress() {
     if (udp_socket_ != -1) break;
     std::this_thread::sleep_for(std::chrono::milliseconds(kTimeToSleep));
   }
-  // sleep(5);
 
   if (udp_socket_ < 0) {
     DEBUG("NO VehicleIdentificationResponse received.\n");
@@ -165,6 +164,7 @@ int DoIpClient::SetUdpSocket(const char *ip, int &udpSockFd) {
  * @param udp_socket
  * @return int
  */
+//TODO: 添加功能  获取多个目标车辆IP和相关信息
 int DoIpClient::UdpHandler(int &udp_socket) {
   uint8_t received_udp_datas[kMaxDataSize];
   struct sockaddr_in client_addr;
@@ -201,8 +201,8 @@ int DoIpClient::UdpHandler(int &udp_socket) {
   return -1;
 }
 
-// TODO: 添加bool参数
-int DoIpClient::TcpHandler() {
+
+int DoIpClient::TcpHandler(bool force) {
   CPRINT("run---------");
   if (inet_ntoa(vehicle_ip_.sin_addr) == nullptr) {
     DEBUG("Get ServerIP ERROR.\n");
@@ -220,7 +220,13 @@ int DoIpClient::TcpHandler() {
   if (-1 == re) {
     return -1;
   }
-  // TODO: bool参数为true 则 建立线程，每两秒钟发一个数据 负载为3e80 负载类型为8001
+  if (force) {
+    tcp_connect_force_ = force;
+    std::thread send_msg(&DoIpClient::TcpSendMsgThread, this);
+    cycle_send_msg_handle_ = send_msg.native_handle();
+    send_msg.detach();
+  }
+
 
   std::thread receive_tcp_msg_thread_(&DoIpClient::HandleTcpMessage, this,
                                       tcp_socket_);
@@ -228,6 +234,14 @@ int DoIpClient::TcpHandler() {
   receive_tcp_msg_thread_.detach();
   CPRINT("end---------");
   return 0;
+}
+
+void DoIpClient::TcpSendMsgThread() {
+  ByteVector usd = {0x3e, 0x80};
+  while(true) {
+    SendDiagnosticMessage(usd);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+  }
 }
 
 void DoIpClient::CloseTcpConnection() {
@@ -238,7 +252,7 @@ void DoIpClient::CloseTcpConnection() {
 
 void DoIpClient::ReconnectServer() {
   CloseTcpConnection();
-  TcpHandler();
+  TcpHandler(tcp_connect_force_);
 }
 /**
  * @brief 处理udp接收到的数据
@@ -248,6 +262,7 @@ void DoIpClient::ReconnectServer() {
  * @param udp_packet DoIpPacket对象，用于填充udp数据
  * @return uint8_t 如果数据错误返回DoIpNackCodes中的对应值，否则返回0xFF
  */
+//TODO: 修改返回值为DoIpNackCodes枚举类
 uint8_t DoIpClient::HandleUdpMessage(uint8_t msg[], ssize_t bytes_available,
                                      DoIpPacket &udp_packet) {
   if (bytes_available < kDoIp_HeaderTotal_length) {
