@@ -117,7 +117,7 @@ int DoIpClient::FindTargetVehicleAddress() {
       DEBUG("Send SendVehicleIdentificationRequest ERROR.\n");
       return -1;
     }
-    if (udp_socket_ < 0) break;
+    // if (udp_socket_ < 0) break;
   }
 
   for (int i = 0; i < (kTimeOut * 1000) / kTimeToSleep; i++) {
