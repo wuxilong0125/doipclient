@@ -78,7 +78,7 @@ static const uint8_t kDoIp_HeaderTotal_fields{5};
  */
 static const uint8_t kDoIp_ProtocolVersion_max{0xFFU};
 
-enum GenericDoIpHeader : char {
+enum GenericDoIpHeader : uint8_t {
   kProtocolVersionIdx,
   kInvProtocolVersionIdx,
   kPayloadTypeIdx,
@@ -86,16 +86,17 @@ enum GenericDoIpHeader : char {
   kPayloadIdx
 };
 
-enum DoIpAckCodes : char {
+enum DoIpAckCodes : uint8_t {
   Ack = 0x00,
 };
 
-enum DoIpNackCodes : char {
+enum DoIpNackCodes : uint8_t {
   kIncorrectPatternFormat = 0x00,
   kUnknownPayloadType = 0x01,
   kMessageTooLarge = 0x02,
   kOutOfMemory = 0x30,
-  kInvalidPayloadLength = 0x04
+  kInvalidPayloadLength = 0x04,
+  kNoError = 0xff
 };
 
 /**
@@ -206,7 +207,7 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
   /**
    * @brief 验证负载类型 
    */
-  uint8_t VerifyPayloadType();
+  DoIpNackCodes VerifyPayloadType();
   std::string GetVIN();
   ByteVector GetLogicalAddress();
   ByteVector GetEID();

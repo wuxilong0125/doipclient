@@ -100,7 +100,7 @@ class UdsMessage : public PayloadOwner<uint16_t> {
     UdsMessage response{this->target_address_, this->source_address_};
     return response;
   }
-};
+}; 
 
 std::ostream& operator<<(std::ostream& stream, const UdsMessage& message);
 bool operator==(const UdsMessage& left, const UdsMessage& right);

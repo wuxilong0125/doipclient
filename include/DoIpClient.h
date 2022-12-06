@@ -10,6 +10,10 @@
 #include <queue>
 #include <string>
 #include <thread>
+#include <vector>
+#include <mutex>
+#include <map>
+#include <set>
 
 #include "CTimer.h"
 #include "DoIpPacket.h"
@@ -21,34 +25,50 @@ static const int kMaxDataSize = 8092;
 static const int kTimeOut = 6;
 static const int kTimeToSleep = 200;  // milliseconds
 
+struct vechicle_msg {
+  struct sockaddr_in vehicle_ip;
+  std::string VIN;
+  ByteVector EID;
+  ByteVector GID;
+  ByteVector LogicalAddress;
+  uint8_t FurtherActionRequired;
+};
 class DoIpClient {
  private:
   struct sockaddr_in vehicle_ip_;
   int tcp_socket_ = -1;
   int udp_socket_ = -1;
+
+  bool is_tcp_socket_open_{false};
+  
   std::string server_ip_prefix_ = "169.254.";
   std::vector<std::thread> threads_;
 
   std::thread tcp_handler_thread_;
   std::vector<std::string> local_ips_;
   struct sockaddr_in udp_sockaddr_, tcp_sockaddr_;
-  std::string VIN;
-  ByteVector EID;
-  ByteVector GID;
-  ByteVector LogicalAddress_;
-  uint8_t FurtherActionRequired_;
-  CTimer *timer;
+
+  CTimer *timer, *tester_present_timer;
   pthread_t handle_of_tcp_thread_, cycle_send_msg_handle_;
   DiagnosticMessageCallBack diag_msg_cb_;
   int reconnect_tcp_counter_;
   std::atomic<int> route_respone{false}, diagnostic_msg_ack{false};
   uint16_t source_address_, target_address_;
-  bool tcp_connect_force_ = false;
+  bool tcp_tester_present_flag_ = false;
+  std::vector<vechicle_msg> vechicle_msgs;
 
-
+  int time_vehicle_Id_req_, time_route_act_req_, time_diagnostic_msg_, time_tester_present_req_, time_tester_present_thread_;
+  std::mutex write_mtx;
+  // 网关和ECU的映射
+  std::map<uint16_t, std::set<uint16_t>> GateWays_map_;
+  
  public:
   DoIpClient();
   ~DoIpClient();
+  void GetVechicleMsgs(std::vector<vechicle_msg> &msg);
+  void SetTimeOut(int time_vehicle_Id_req, int time_route_act_req, 
+                            int time_diagnostic_msg, int time_tester_present_req, 
+                            int time_tester_present_thread);
   /**
    * @brief 获取所有本机的IP地址
    */
@@ -62,12 +82,12 @@ class DoIpClient {
    */
   int HandleTcpMessage(int tcp_socket);
 
-  void TcpSendMsgThread();
+  void TesterPresentThread();
   
   /**
    * @brief 处理TCP连接
    */
-  int TcpHandler(bool force);
+  int TcpHandler(bool force, sockaddr_in vehicle_ip);
   /**
    * @brief 关闭TCP连接
    */
@@ -87,12 +107,12 @@ class DoIpClient {
   /**
    * @brief 处理UDP连接
    */
-  int UdpHandler(int &udp_socket);
+  void UdpHandler(int &udp_socket);
 
   /**
    * @brief 接收处理UDP数据报
    */
-  uint8_t HandleUdpMessage(uint8_t msg[], ssize_t length,
+  DoIpNackCodes HandleUdpMessage(uint8_t msg[], ssize_t length,
                            DoIpPacket &udp_packet);
 
   /**
@@ -131,17 +151,12 @@ class DoIpClient {
    * @brief 发送诊断数据报
    */
   int SendDiagnosticMessage(ByteVector user_data);
-  /**
-   * @brief 获取路由回复状态
-   */
-  bool GetIsRouteResponse();
-  /**
-   * @brief 获取诊断肯定请求状态
-   */
-  bool GetIsDiagnosticAck();
+  void SendTesterRequest(uint16_t target_address);
+
   /**
    * @brief 设置数据报源地址
    */
   void SetSourceAddress(uint16_t s_addr);
+
 };
 #endif

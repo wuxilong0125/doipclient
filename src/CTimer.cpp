@@ -1,4 +1,3 @@
-
 #include "CTimer.h"
 
 CTimer::CTimer(TimerHandler timer_handler)
@@ -21,7 +20,6 @@ CTimer::~CTimer()
 
 void CTimer::StartOnce(CTimer::Clock::duration timeout, const bool flag)
 {
-    
     std::unique_lock<std::mutex> lock(mutex_);
     mode_ = kOneshot;
     next_expiry_point_ = Clock::now() + timeout;

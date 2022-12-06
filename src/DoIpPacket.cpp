@@ -35,8 +35,8 @@ void DoIpPacket::Ntoh() {
   }
 }
 
-//TODO: 修改返回值为 DoIpNackCodes枚举类，添加枚举类0xff表示无问题
-uint8_t DoIpPacket::VerifyPayloadType() {
+
+DoIpNackCodes DoIpPacket::VerifyPayloadType() {
   printf("[VerifyPayloadType] payload_type_: 0x%04x\n",payload_type_);
   switch (payload_type_) {
     case DoIpPayload::kRoutingActivationRequest: {
@@ -99,7 +99,7 @@ uint8_t DoIpPacket::VerifyPayloadType() {
     default:
       break;
   }
-  return 0xFF;
+  return DoIpNackCodes::kNoError;
 }
 
 std::string DoIpPacket::GetVIN() {
