@@ -52,3 +52,11 @@ bool operator==(const UdsMessage& left, const UdsMessage& right) {
     return false;
   }
 }
+
+bool EqualUds(ByteVector uds1, ByteVector uds2) {
+  if (uds1.size() != uds2.size()) return false;
+  for (int i = 0; i < uds1.size(); i ++) {
+    if (uds1.at(i) != uds2.at(i)) return false;
+  }
+  return true;
+}

@@ -14,9 +14,11 @@
 #include <mutex>
 #include <map>
 #include <set>
+#include <condition_variable>
 
 #include "CTimer.h"
 #include "DoIpPacket.h"
+#include "ECU.h"
 
 class CTimer;
 using DiagnosticMessageCallBack = std::function<void(unsigned char *, int)>;
@@ -52,7 +54,8 @@ class DoIpClient {
   pthread_t handle_of_tcp_thread_, cycle_send_msg_handle_;
   DiagnosticMessageCallBack diag_msg_cb_;
   int reconnect_tcp_counter_;
-  std::atomic<int> route_respone{false}, diagnostic_msg_ack{false};
+  std::atomic<bool> route_respone{false}, diagnostic_msg_ack{false}, 
+                    diagnostic_msg_nack{false}, diagnostic_msg_response{false};
   uint16_t source_address_, target_address_;
   bool tcp_tester_present_flag_ = false;
   std::vector<vechicle_msg> vechicle_msgs;
@@ -61,10 +64,14 @@ class DoIpClient {
   std::mutex write_mtx;
   // 网关和ECU的映射
   std::map<uint16_t, std::set<uint16_t>> GateWays_map_;
-  
+  std::map<uint16_t, ECU> ecu_map_;
+  std::map<uint16_t, pthread_t> ecu_thread_map_;
  public:
   DoIpClient();
   ~DoIpClient();
+  void f() {
+    GateWays_map_.insert({0x0001, {0x0002,0x0003}});
+  }
   void GetVechicleMsgs(std::vector<vechicle_msg> &msg);
   void SetTimeOut(int time_vehicle_Id_req, int time_route_act_req, 
                             int time_diagnostic_msg, int time_tester_present_req, 
@@ -150,13 +157,13 @@ class DoIpClient {
   /**
    * @brief 发送诊断数据报
    */
-  int SendDiagnosticMessage(ByteVector user_data);
+  int SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_data, int timeout);
   void SendTesterRequest(uint16_t target_address);
-
+  void SendECUsMeassage(std::vector<ECU> ecus, bool suppress_flag);
+  void SendDiagnosticMessageThread(uint16_t ecu_address);
   /**
    * @brief 设置数据报源地址
    */
   void SetSourceAddress(uint16_t s_addr);
-
 };
 #endif

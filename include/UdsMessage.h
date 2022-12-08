@@ -104,4 +104,6 @@ class UdsMessage : public PayloadOwner<uint16_t> {
 
 std::ostream& operator<<(std::ostream& stream, const UdsMessage& message);
 bool operator==(const UdsMessage& left, const UdsMessage& right);
+
+bool EqualUds(ByteVector uds1, ByteVector uds2);
 #endif
