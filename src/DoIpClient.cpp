@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <iostream>
+#include <string>
 #include <thread>
 
 #include "MultiByteType.h"
@@ -37,16 +38,36 @@
 #endif
 
 DoIpClient::DoIpClient() {
-  timer = new CTimer(
-      std::bind(&DoIpClient::TimerCallBack, this, std::placeholders::_1));
-  tester_present_timer = nullptr;
+  // timer = new CTimer(
+  //     std::bind(&DoIpClient::TimerCallBack, this, std::placeholders::_1));
+  // tester_present_timer = nullptr;
 }
 DoIpClient::~DoIpClient() {
-  if (timer) {
-    delete timer;
+  // if (timer) {
+  //   delete timer;
+  // }
+  // if (tester_present_timer) {
+  //   delete tester_present_timer;
+  // }
+  for (auto& mp : GateWays_) {
+    if (mp != nullptr) {
+      delete mp;
+      mp = nullptr;
+    } 
   }
-  if (tester_present_timer) {
-    delete tester_present_timer;
+
+  for (auto& mp : GateWays_map_) {
+    if (mp.second != nullptr) {
+      delete mp.second;
+      mp.second = nullptr;
+    }
+  }
+
+  for (auto& mp : ecu_map_) {
+    if (mp.second != nullptr) {
+      delete mp.second;
+      mp.second = nullptr;
+    }
   }
 }
 
@@ -190,37 +211,40 @@ void DoIpClient::UdpHandler(int &udp_socket) {
         HandleUdpMessage(received_udp_datas, bytes_received, udp_packet);
     if (DoIpNackCodes::kNoError == re &&
         udp_packet.payload_type_ == DoIpPayload::kVehicleAnnouncement) {
-      GateWay gate_way;
-      gate_way.vehicle_ip_ = client_addr;
-      gate_way.VIN = udp_packet.GetVIN();
-      gate_way.Address_ = (static_cast<uint16_t>(udp_packet.GetLogicalAddress().at(0)) << 8) | 
+      GateWay* gate_way = new GateWay;
+      gate_way->vehicle_ip_ = client_addr;
+
+      gate_way->VIN = udp_packet.GetVIN();
+      gate_way->gate_way_address_ = (static_cast<uint16_t>(udp_packet.GetLogicalAddress().at(0)) << 8) | 
                           (static_cast<uint16_t>(udp_packet.GetLogicalAddress().at(1)));
-      gate_way.EID = udp_packet.GetEID();
-      gate_way.GID = udp_packet.GetGID();
-      gate_way.FurtherActionRequired = udp_packet.GetFurtherActionRequied();
+      gate_way->EID = udp_packet.GetEID();
+      gate_way->GID = udp_packet.GetGID();
+      gate_way->FurtherActionRequired = udp_packet.GetFurtherActionRequied();
       GateWays_.push_back(gate_way);
+      // GateWays_map_[addr_ip] = gate_way;
+      GateWays_map_.insert({gate_way->gate_way_address_, gate_way});
       // udp_reply_cv_.notify_all();
       return;
     }
   }
 }
 
-int DoIpClient::TcpHandler(GateWay &gate_way) {
-  if (inet_ntoa(gate_way.vehicle_ip_.sin_addr) == nullptr) {
+int DoIpClient::TcpHandler(GateWay* gate_way) {
+  if (inet_ntoa(gate_way->vehicle_ip_.sin_addr) == nullptr) {
     DEBUG("Get ServerIP ERROR.\n");
     return -1;
   }
   // vehicle_ip_ = vehicle_ip;
-  gate_way.tcp_socket_ = socket(AF_INET, SOCK_STREAM, 0);
+  gate_way->tcp_socket_ = socket(AF_INET, SOCK_STREAM, 0);
 
-  if (gate_way.tcp_socket_ <= 0) {
+  if (gate_way->tcp_socket_ <= 0) {
     return -1;
   }
   
   tcp_sockaddr_.sin_family = AF_INET;
   tcp_sockaddr_.sin_port = htons(kPort);
-  tcp_sockaddr_.sin_addr = gate_way.vehicle_ip_.sin_addr;
-  int re = connect(gate_way.tcp_socket_, (struct sockaddr *)&tcp_sockaddr_,
+  tcp_sockaddr_.sin_addr = gate_way->vehicle_ip_.sin_addr;
+  int re = connect(gate_way->tcp_socket_, (struct sockaddr *)&tcp_sockaddr_,
                    sizeof(tcp_sockaddr_));
   if (-1 == re) {
     return -1;
@@ -231,7 +255,7 @@ int DoIpClient::TcpHandler(GateWay &gate_way) {
   receive_tcp_thread_handles_.push_back(receive_handle);
   receive_tcp_msg_thread_.detach();
   
-  gate_way.is_tcp_socket_open_ = true;
+  gate_way->is_tcp_socket_open_ = true;
   return 0;
 }
 
@@ -243,26 +267,26 @@ void DoIpClient::TesterPresentThread() {
   }
 }
 
-void DoIpClient::CloseTcpConnection(GateWay &gate_way) {
-  if (!gate_way.is_tcp_socket_open_) {
+void DoIpClient::CloseTcpConnection(GateWay* gate_way) {
+  if (!gate_way->is_tcp_socket_open_) {
     return;
   }
   for (auto t : receive_tcp_thread_handles_) {
     pthread_cancel(t);
   }
   
-  pthread_cancel(cycle_send_msg_handle_);
+  // pthread_cancel(cycle_send_msg_handle_);
   // close(tcp_socket_);
-  if (-1 == shutdown(gate_way.tcp_socket_, SHUT_RDWR)) {
-    PRINT("Disconnect from server %s\n", inet_ntoa(gate_way.vehicle_ip_.sin_addr));
+  if (-1 == shutdown(gate_way->tcp_socket_, SHUT_RDWR)) {
+    PRINT("Disconnect from server %s\n", inet_ntoa(gate_way->vehicle_ip_.sin_addr));
     return;
   }
 
-  gate_way.is_tcp_socket_open_ = false;
-  PRINT("Disconnect from server %s\n", inet_ntoa(gate_way.vehicle_ip_.sin_addr));
+  gate_way->is_tcp_socket_open_ = false;
+  PRINT("Disconnect from server %s\n", inet_ntoa(gate_way->vehicle_ip_.sin_addr));
 }
 
-void DoIpClient::ReconnectServer(GateWay &gate_way) {
+void DoIpClient::ReconnectServer(GateWay* gate_way) {
   CloseTcpConnection(gate_way);
   TcpHandler(gate_way);
 }
@@ -310,15 +334,15 @@ DoIpNackCodes DoIpClient::HandleUdpMessage(uint8_t msg[],
   return DoIpNackCodes::kNoError;
 }
 
-int DoIpClient::HandleTcpMessage(GateWay &gate_way) {
+int DoIpClient::HandleTcpMessage(GateWay* gate_way) {
   if (socket < 0) {
     CPRINT("ERROR : No Tcp Socket set.");
     return -1;
   }
 
-  while (gate_way.is_tcp_socket_open_) {
+  while (gate_way->is_tcp_socket_open_) {
     DoIpPacket doip_tcp_message(DoIpPacket::kHost);
-    int re = SocketReadHeader(gate_way.tcp_socket_, doip_tcp_message);
+    int re = SocketReadHeader(gate_way->tcp_socket_, doip_tcp_message);
     doip_tcp_message.Ntoh();
     if (re == -1) {
       CPRINT("SocketReadHeader is ERROR.");
@@ -337,7 +361,7 @@ int DoIpClient::HandleTcpMessage(GateWay &gate_way) {
       CPRINT("time-over.");
       continue;
     }
-    uint8_t v_code = doip_tcp_message.VerifyPayloadType();
+    uint8_t v_code = doip_tcp_message.VerifyPayloadType(); 
 
     if (v_code != 0xFF) {
       CPRINT("PayloadType ERROR: " + std::to_string(v_code));
@@ -346,7 +370,7 @@ int DoIpClient::HandleTcpMessage(GateWay &gate_way) {
     if (doip_tcp_message.payload_length_ != 0) {
       doip_tcp_message.SetPayloadLength(doip_tcp_message.payload_length_, true);
       // 接收负载
-      int re = SocketReadPayload(gate_way.tcp_socket_, doip_tcp_message);
+      int re = SocketReadPayload(gate_way->tcp_socket_, doip_tcp_message);
       if (re != 0) {
         continue;
       } else {
@@ -363,30 +387,31 @@ int DoIpClient::HandleTcpMessage(GateWay &gate_way) {
               break;
             }
             CPRINT("route_respone is true!");
-            gate_way.route_response = true;
-            gate_way.route_response_cv_.notify_all();
+            gate_way->route_response = true;
+            gate_way->route_response_cv_.notify_all();
 
             break;
           }
           case DoIpPayload::kDiagnosticAck: {
             CPRINT("---DiagnosticAck---");
-            ecu_map_[ecu_address].SetDiagnosticAck(true);
+            ecu_map_[ecu_address]->SetDiagnosticAck(true);
             // diagnostic_msg_ack = true;
-            ecu_map_[ecu_address].ecu_reply_cv_.notify_all();
+            ecu_map_[ecu_address]->ecu_reply_cv_.notify_all();
             break;
           }
           case DoIpPayload::kDiagnosticNack: {
-            ecu_map_[ecu_address].SetDiagnosticNack(true);
+            ecu_map_[ecu_address]->SetDiagnosticNack(true);
             // diagnostic_msg_nack = true;
-            ecu_map_[ecu_address].ecu_reply_cv_.notify_all();
+            ecu_map_[ecu_address]->ecu_reply_cv_.notify_all();
             break;
           }
           case DoIpPayload::kDiagnosticMessage: {
             CPRINT("---DiagnosticMessage---");
-            ecu_map_[ecu_address].SetDiagnosticResponse(true);
+            ecu_map_[ecu_address]->SetDiagnosticResponse(true);
             // diagnostic_msg_response = true;
-            ecu_map_[ecu_address].ecu_reply_cv_.notify_all();
+            ecu_map_[ecu_address]->ecu_reply_cv_.notify_all();
             // timer->Stop();
+            // TODO: 修改
             if (diag_msg_cb_) {
               diag_msg_cb_(doip_tcp_message.payload_.data() + 4,
                            doip_tcp_message.payload_.size() - 4);
@@ -538,41 +563,41 @@ void DoIpClient::SetCallBack(DiagnosticMessageCallBack diag_msg_cb) {
   diag_msg_cb_ = diag_msg_cb;
 }
 
-int DoIpClient::SendRoutingActivationRequest(GateWay &gate_way) {
+int DoIpClient::SendRoutingActivationRequest(GateWay* gate_way) {
   CPRINT("run----------");
-  if (gate_way.tcp_socket_ < 0) {
+  if (gate_way->tcp_socket_ < 0) {
     CPRINT("TCP socket is error.");
     return -1;
   }
   DoIpPacket routeing_act_req(DoIpPacket::kHost);
   routeing_act_req.ConstructRoutingActivationRequest(source_address_);
-  if (gate_way.route_response) {
-    gate_way.route_response = false;
+  if (gate_way->route_response) {
+    gate_way->route_response = false;
   }
   // CTimer::Clock::duration timeout = std::chrono::seconds(time_route_act_req_);
   // timer->StartOnce(timeout, true);
 
-  int re = SocketWrite(gate_way.tcp_socket_, routeing_act_req, &gate_way.vehicle_ip_);
+  int re = SocketWrite(gate_way->tcp_socket_, routeing_act_req, &gate_way->vehicle_ip_);
   // printf("re: %d\n",re);
   if (-1 == re) {
     // timer->Stop();
     return -1;
   }
-  std::unique_lock<std::mutex> lock(gate_way.route_mutex_);
+  std::unique_lock<std::mutex> lock(gate_way->route_mutex_);
   
-  gate_way.route_response_cv_.wait_for(lock, std::chrono::seconds(time_route_act_req_), 
-                                    [&gate_way]{ return gate_way.GetRouteResponse();});
+  gate_way->route_response_cv_.wait_for(lock, std::chrono::seconds(time_route_act_req_), 
+                                    [gate_way]{ return gate_way->GetRouteResponse();});
   // useconds_t inter_us = 200;
   // while (!route_respone && timer->IsRunning()) {
   //   usleep(inter_us);
   // }
 
   // sleep(5);
-  if (gate_way.route_response) {
-    gate_way.route_response = false;
+  if (gate_way->route_response) {
+    gate_way->route_response = false;
     CPRINT("Routing Activation successful.");\
     // TODO: 修改 发送 tester present
-    if (gate_way.tcp_tester_present_flag_) {
+    if (gate_way->tcp_tester_present_flag_) {
       if (tester_present_timer) {
         delete tester_present_timer;
         tester_present_timer = nullptr;
@@ -590,81 +615,87 @@ int DoIpClient::SendRoutingActivationRequest(GateWay &gate_way) {
   return 0;
 }
 
-void DoIpClient::SendECUsMeassage(std::vector<ECU> ecus, bool suppress_flag) {
-  for (auto& ecu : ecus) {
-    if (ecu_thread_map_.find(ecu.GetAddress()) == ecu_thread_map_.end()) {
-      std::thread send_ecu_msg_thread(&DoIpClient::SendDiagnosticMessageThread, this,
-                                      ecu.GetAddress());
-      ecu_thread_map_.insert(
-          {ecu.GetAddress(), send_ecu_msg_thread.native_handle()});
-      send_ecu_msg_thread.detach();
-    } else {
-      ByteVector new_uds;
-      ecu.GetUds(new_uds);
-      ecu_map_[ecu.GetAddress()].SetUds(new_uds);
+ECUReplyCode DoIpClient::SendECUMeassage(uint16_t ecu_address, ByteVector uds, bool suppress_flag) {
+
+  ECU* ecu = ecu_map_[ecu_address];
+  if (ecu_thread_map_.find(ecu_address) == ecu_thread_map_.end()) {
+    std::thread send_ecu_msg_thread(&DoIpClient::SendDiagnosticMessageThread, this,
+                                      ecu_address);
+    ecu_thread_map_.insert(
+        {ecu_address, send_ecu_msg_thread.native_handle()});
+    send_ecu_msg_thread.detach();
+  } else {
+    ecu->SetUds(uds);
       
-      //  唤醒SendDiagnosticMessage
-      ecu_map_[ecu.GetAddress()].SetSendAgain(true);
-      ecu.send_again_cv_.notify_all();
-    }
+    //  唤醒SendDiagnosticMessage
+    ecu->SetSendAgain(true);
+    ecu->send_again_cv_.notify_all();
   }
+  std::unique_lock<std::mutex> lock(ecu->reply_Status_mutex_);
+  ecu->ecu_reply_status_cv_.wait(lock);
+
+  return ecu_reply_status_map_[ecu_address];
 }
+
 void DoIpClient::SendDiagnosticMessageThread(uint16_t ecu_address) {
-  ECU &ecu = ecu_map_[ecu_address];
-  std::unique_lock<std::mutex> lock(*ecu.GetMutex());
+  ECU* ecu = ecu_map_[ecu_address];
+  std::unique_lock<std::mutex> lock(ecu->thread_mutex_);
   while(true) {
-    ecu.send_again_cv_.wait(lock, [&ecu]{ return ecu.GetSendAgain();});
+    ecu->send_again_cv_.wait(lock, [ecu]{ return ecu->GetSendAgain();});
     ByteVector user_data;
-    ecu.GetUds(user_data);
-    SendDiagnosticMessage(ecu_address, user_data, ecu.GetTimeOut());
-    ecu.SetSendAgain(false);
+    ecu->GetUds(user_data);
+    SendDiagnosticMessage(ecu_address, user_data, ecu->GetTimeOut());
+    ecu->SetSendAgain(false);
   }
 }
 
-int DoIpClient::SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_data, int time_out) {
-  ECU &ecu = ecu_map_[ecu_address];
-  std::unique_lock<std::mutex> lock(*ecu.GetWriteMutex());
+void DoIpClient::SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_data, int time_out) {
+  ECU* ecu = ecu_map_[ecu_address];
+  std::unique_lock<std::mutex> lock(ecu->write_mutex_);
   if (user_data.size() == 0) {
     CPRINT("Payload is NULL.");
-    ecu_reply_status_map_[ecu_address] = ECUReplyCode::kSendError;
-    return -1;
+    ecu_reply_status_map_.insert({ecu_address, ECUReplyCode::kSendError});
+    ecu->ecu_reply_status_cv_.notify_all();
+    return ;
   }
-  if (tcp_socket_ <= 0) {
+  if (ecu->tcp_socket_ <= 0) {
     CPRINT("TCP socket is error.");
-    ecu_reply_status_map_[ecu_address] = ECUReplyCode::kSendError;
-    return -1;
+    ecu_reply_status_map_.insert({ecu_address, ECUReplyCode::kSendError});
+    ecu->ecu_reply_status_cv_.notify_all();
+    return ;
   }
-  if (!is_tcp_socket_open_) {
+  if (!ecu->GetSocketStatus()) {
     CPRINT("TCP is not connected");
-    ecu_reply_status_map_[ecu_address] = ECUReplyCode::kSendError;
-    return -1;
+    ecu_reply_status_map_.insert({ecu_address, ECUReplyCode::kSendError});
+    ecu->ecu_reply_status_cv_.notify_all();
+    return ;
   }
   DoIpPacket diagnostic_msg(DoIpPacket::kHost);
   diagnostic_msg.ConstructDiagnosticMessage(source_address_, ecu_address,
                                             user_data);
 
-  // TODO: 修改 超时机制
-  // CTimer::Clock::duration timeout = std::chrono::seconds(time_out);
-  if (ecu.GetDiagnosticAck()) {
-    ecu.SetDiagnosticAck(false);
+
+  if (ecu->GetDiagnosticAck()) {
+    ecu->SetDiagnosticAck(false);
   }
-  if (ecu.GetDiagnosticNack()) {
-    ecu.SetDiagnosticNack(false);
+  if (ecu->GetDiagnosticNack()) {
+    ecu->SetDiagnosticNack(false);
   }
-  if (ecu.GetDiagnosticResponse()) {
-    ecu.SetDiagnosticResponse(false);
+  if (ecu->GetDiagnosticResponse()) {
+    ecu->SetDiagnosticResponse(false);
   }
   // timer->StartOnce(timeout);
-  int re = SocketWrite(tcp_socket_, diagnostic_msg, &vehicle_ip_);
+  int re = SocketWrite(ecu->tcp_socket_, diagnostic_msg, &vehicle_ip_);
   if (-1 == re) {
-    ecu_reply_status_map_[ecu_address] = ECUReplyCode::kSendError;
-    return -1;
+    ecu_reply_status_map_.insert({ecu_address, ECUReplyCode::kSendError});
+    ecu->ecu_reply_status_cv_.notify_all();
+    return ;
   }
 
-  ecu_map_[ecu_address].ecu_reply_cv_.wait_for(lock, std::chrono::seconds(time_out), 
-                                              [&ecu]{ return (ecu.GetDiagnosticAck() 
-                                                              || ecu.GetDiagnosticNack()
-                                                              || ecu.GetDiagnosticResponse());});
+  ecu_map_[ecu_address]->ecu_reply_cv_.wait_for(lock, std::chrono::seconds(time_out), 
+                                              [&ecu]{ return (ecu->GetDiagnosticAck() 
+                                                              || ecu->GetDiagnosticNack()
+                                                              || ecu->GetDiagnosticResponse());});
 
   // useconds_t inter_us = 100;
   // while (!diagnostic_msg_ack && timer->IsRunning()) {
@@ -672,24 +703,24 @@ int DoIpClient::SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_data
   // }
 
 
-  if (ecu.GetDiagnosticAck()) {
-    ecu_reply_status_map_[ecu_address] = ECUReplyCode::kACK;
-    ecu.SetDiagnosticAck(false);
-  }else if (ecu.GetDiagnosticNack()) {
-    ecu_reply_status_map_[ecu_address] = ECUReplyCode::kNACK;
-    ecu.SetDiagnosticNack(false);
-  }else if (ecu.GetDiagnosticResponse()) {
-    ecu_reply_status_map_[ecu_address] = ECUReplyCode::kResp;
-    ecu.SetDiagnosticResponse(false);
+  if (ecu->GetDiagnosticAck()) {
+    ecu_reply_status_map_.insert({ecu_address, ECUReplyCode::kACK});
+    ecu->SetDiagnosticAck(false);
+    ecu->ecu_reply_status_cv_.notify_all();
+  }else if (ecu->GetDiagnosticNack()) {
+    ecu_reply_status_map_.insert({ecu_address, ECUReplyCode::kNACK});
+    ecu->SetDiagnosticNack(false);
+    ecu->ecu_reply_status_cv_.notify_all();
+  }else if (ecu->GetDiagnosticResponse()) {
+    ecu_reply_status_map_.insert({ecu_address, ECUReplyCode::kResp});
+    ecu->SetDiagnosticResponse(false);
+    ecu->ecu_reply_status_cv_.notify_all();
   }else {
     CPRINT("DiagnosticMessage ACK timeout.");
-    ecu_reply_status_map_[ecu_address] = ECUReplyCode::kTimeOut;
-    return -1;
+    ecu_reply_status_map_.insert({ecu_address, ECUReplyCode::kTimeOut});
+    ecu->ecu_reply_status_cv_.notify_all();
+    return ;
   }
-
-
-
-  return 0;
 }
 
 void DoIpClient::SendTesterRequest(uint16_t target_address) {
@@ -734,7 +765,7 @@ void DoIpClient::SendTesterRequest(uint16_t target_address) {
 
 void DoIpClient::SetSourceAddress(uint16_t s_addr) { source_address_ = s_addr; }
 
-void DoIpClient::GetVechicleMsgs(std::vector<GateWay> &gate_ways) {
+void DoIpClient::GetVechicleMsgs(std::vector<GateWay*> &gate_ways) {
   gate_ways = GateWays_;
 }
 

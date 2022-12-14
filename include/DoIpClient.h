@@ -62,23 +62,22 @@ class DoIpClient {
   //                   diagnostic_msg_nack{false}, diagnostic_msg_response{false};
   uint16_t source_address_, target_address_;
   bool tcp_tester_present_flag_ = false;
-  std::vector<GateWay> GateWays_;
+  std::vector<GateWay*> GateWays_;
   
 
   int time_vehicle_Id_req_, time_route_act_req_, time_diagnostic_msg_, time_tester_present_req_, time_tester_present_thread_;
   std::mutex write_mtx;
-  // 网关和ECU的映射
-  std::map<uint16_t, std::set<uint16_t>> GateWays_map_;
-  std::map<uint16_t, ECU> ecu_map_;
+  // 网关和ECU的映射·
+  std::map<uint16_t, uint16_t> ecu_gateway_map_;
+  std::map<uint16_t, GateWay*> GateWays_map_;
+  std::map<uint16_t, ECU*> ecu_map_;
   std::map<uint16_t, pthread_t> ecu_thread_map_;
   std::map<uint16_t, ECUReplyCode> ecu_reply_status_map_;
  public:
   DoIpClient();
   ~DoIpClient();
-  void f() {
-    GateWays_map_.insert({0x0001, {0x0002,0x0003}});
-  }
-  void GetVechicleMsgs(std::vector<GateWay> &gate_ways);
+
+  void GetVechicleMsgs(std::vector<GateWay*> &gate_ways);
   void SetTimeOut(int time_vehicle_Id_req, int time_route_act_req, 
                             int time_diagnostic_msg, int time_tester_present_req, 
                             int time_tester_present_thread);
@@ -93,22 +92,22 @@ class DoIpClient {
   /**
    * @brief 接收处理TCP数据报
    */
-  int HandleTcpMessage(GateWay &gate_way);
+  int HandleTcpMessage(GateWay *gate_way);
 
   void TesterPresentThread();
   
   /**
    * @brief 处理TCP连接
    */
-  int TcpHandler(GateWay &gate_way);
+  int TcpHandler(GateWay* gate_way);
   /**
    * @brief 关闭TCP连接
    */
-  void CloseTcpConnection(GateWay &gate_way);
+  void CloseTcpConnection(GateWay* gate_way);
   /**
    * @brief TCP重连
    */
-  void ReconnectServer(GateWay &gate_way);
+  void ReconnectServer(GateWay* gate_way);
   /**
    * @brief 设置目标服务的IP前缀
    */
@@ -159,13 +158,13 @@ class DoIpClient {
   /**
    * @brief 发送路由激活请求
    */
-  int SendRoutingActivationRequest();
+  int SendRoutingActivationRequest(GateWay* gate_way);
   /**
    * @brief 发送诊断数据报
    */
-  int SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_data, int timeout);
+  void SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_data, int time_out);
   void SendTesterRequest(uint16_t target_address);
-  void SendECUsMeassage(std::vector<ECU> ecus, bool suppress_flag);
+  ECUReplyCode SendECUMeassage(uint16_t ecu_address, ByteVector uds, bool suppress_flag);
   void SendDiagnosticMessageThread(uint16_t ecu_address);
   /**
    * @brief 设置数据报源地址

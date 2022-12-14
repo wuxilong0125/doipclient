@@ -68,7 +68,7 @@ DoIpNackCodes DoIpPacket::VerifyPayloadType() {
       break;
     }
     case DoIpPayload::kVehicleAnnouncement: {
-      if (payload_length_ != 32) {
+      if (payload_length_ != 32 && payload_length_ != 33) {
         payload_type_ = DoIpPayload::kGenericDoIpNack;
         return DoIpNackCodes::kInvalidPayloadLength;
       }
