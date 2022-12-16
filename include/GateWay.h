@@ -8,11 +8,11 @@
 #include <condition_variable>
 
 #include "Payload.h"
-class GateWay {
+class GateWay { 
  public:
   struct sockaddr_in vehicle_ip_;
-  std::mutex route_mutex_;
-  std::condition_variable route_response_cv_;
+  std::mutex route_mutex_, write_mutex_;
+  std::condition_variable route_response_cv_, tester_present_response_;
   int tcp_socket_ = -1;
   std::string VIN;
   ByteVector EID;
@@ -22,6 +22,7 @@ class GateWay {
   bool tcp_tester_present_flag_ = false;
   bool is_tcp_socket_open_ = false;
   bool route_response{false};
+  bool diagnostic_msg_ack{false};
   std::string gate_way_ip_;
 
   bool GetRouteResponse() { return route_response; };

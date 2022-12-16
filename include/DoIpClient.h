@@ -92,9 +92,9 @@ class DoIpClient {
   /**
    * @brief 接收处理TCP数据报
    */
-  int HandleTcpMessage(GateWay *gate_way);
+  int HandleTcpMessage(GateWay* gate_way);
 
-  void TesterPresentThread();
+  void TesterPresentThread(GateWay* gate_way);
   
   /**
    * @brief 处理TCP连接
@@ -163,7 +163,7 @@ class DoIpClient {
    * @brief 发送诊断数据报
    */
   void SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_data, int time_out);
-  void SendTesterRequest(uint16_t target_address);
+  void SendTesterRequest(GateWay* gate_way);
   ECUReplyCode SendECUMeassage(uint16_t ecu_address, ByteVector uds, bool suppress_flag);
   void SendDiagnosticMessageThread(uint16_t ecu_address);
   /**

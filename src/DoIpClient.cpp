@@ -30,7 +30,7 @@
 #define PRINT_V
 #ifndef PRINT_V
 #define PRINT_V(_1, _2, _3) \
-  printf(_1);               \
+  printf(_1);               \       
   for (auto v : _2) {       \
     printf(_3, v);          \
   }                         \
@@ -123,7 +123,7 @@ int DoIpClient::FindTargetVehicleAddress() {
   for (int i = 0; i < local_ips_.size(); i++) {
     PRINT("local_ip: %s\n", local_ips_[i].c_str());
     re = SetUdpSocket(local_ips_[i].c_str(), udp_sockets[i]);
-    if (-1 == re) {
+    if (-1 == re) { 
       DEBUG("SetUdpSocket is error.\n");
       return -1;
     }
@@ -259,9 +259,9 @@ int DoIpClient::TcpHandler(GateWay* gate_way) {
   return 0;
 }
 
-void DoIpClient::TesterPresentThread() {
-  while (is_tcp_socket_open_) {
-    SendTesterRequest(target_address_);
+void DoIpClient::TesterPresentThread(GateWay* gate_way) {
+  while (gate_way->is_tcp_socket_open_) {
+    SendTesterRequest(gate_way);
     std::this_thread::sleep_for(
         std::chrono::seconds(time_tester_present_thread_));
   }
@@ -723,13 +723,13 @@ void DoIpClient::SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_dat
   }
 }
 
-void DoIpClient::SendTesterRequest(uint16_t target_address) {
-  std::lock_guard<std::mutex> lk(write_mtx);
-  if (tcp_socket_ <= 0) {
+void DoIpClient::SendTesterRequest(GateWay* gate_way) {
+  std::unique_lock<std::mutex> lock(gate_way->write_mutex_);
+  if (gate_way->tcp_socket_ <= 0) {
     CPRINT("SendTesterRequest ERROR, TCP socket is not open.");
     return;
   }
-  if (!is_tcp_socket_open_) {
+  if (!gate_way->is_tcp_socket_open_) {
     CPRINT("SendTesterRequest ERROR, TCP is not connected.");
     return;
   }
@@ -737,26 +737,24 @@ void DoIpClient::SendTesterRequest(uint16_t target_address) {
   DoIpPacket tester_present_request(DoIpPacket::kHost);
   tester_present_request.ConstructDiagnosticMessage(source_address_,
                                                     target_address_, user_data);
-  CTimer::Clock::duration timeout =
-      std::chrono::seconds(time_tester_present_req_);
-  if (diagnostic_msg_ack) {
-    diagnostic_msg_ack = false;
+
+  if (gate_way->diagnostic_msg_ack) {
+    gate_way->diagnostic_msg_ack = false;
   }
-  tester_present_timer->StartOnce(timeout);
-  int re = SocketWrite(tcp_socket_, tester_present_request, &vehicle_ip_);
+
+  int re = SocketWrite(gate_way->tcp_socket_, tester_present_request, &vehicle_ip_);
   if (-1 == re) {
-    tester_present_timer->Stop();
+
     CPRINT("SendTesterRequest ERROR, {}", strerror(errno));
     return;
   }
-  useconds_t inter_us = 100;
-  while (!diagnostic_msg_ack && tester_present_timer->IsRunning()) {
-    usleep(inter_us);
-  }
+  gate_way->tester_present_response_.wait_for(lock, std::chrono::seconds(time_tester_present_req_), 
+                                              [gate_way]{ return gate_way->diagnostic_msg_ack;});
 
-  if (diagnostic_msg_ack) {
-    tester_present_timer->Stop();
-    diagnostic_msg_ack = false;
+
+  if (gate_way->diagnostic_msg_ack) {
+    // tester_present_timer->Stop();
+    gate_way->diagnostic_msg_ack = false;
   } else {
     CPRINT("SendTesterRequest ACK timeout.");
     return;
