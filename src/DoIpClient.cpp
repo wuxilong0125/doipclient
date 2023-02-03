@@ -123,7 +123,7 @@ int DoIpClient::FindTargetVehicleAddress() {
   for (int i = 0; i < local_ips_.size(); i++) {
     PRINT("local_ip: %s\n", local_ips_[i].c_str());
     re = SetUdpSocket(local_ips_[i].c_str(), udp_sockets[i]);
-    if (-1 == re) { 
+    if (-1 == re) {
       DEBUG("SetUdpSocket is error.\n");
       return -1;
     }
@@ -150,6 +150,7 @@ int DoIpClient::FindTargetVehicleAddress() {
   std::unique_lock<std::mutex> lock(udp_mutex_);
   udp_reply_cv_.wait_for(lock, std::chrono::seconds(time_vehicle_Id_req_));
 
+  // TODO: 修改  GateWays_由配置文件给出
   if (GateWays_.empty()) {
     DEBUG("NO VehicleIdentificationResponse received.\n");
     return -1;
@@ -211,18 +212,21 @@ void DoIpClient::UdpHandler(int &udp_socket) {
         HandleUdpMessage(received_udp_datas, bytes_received, udp_packet);
     if (DoIpNackCodes::kNoError == re &&
         udp_packet.payload_type_ == DoIpPayload::kVehicleAnnouncement) {
-      GateWay* gate_way = new GateWay;
-      gate_way->vehicle_ip_ = client_addr;
 
-      gate_way->VIN = udp_packet.GetVIN();
-      gate_way->gate_way_address_ = (static_cast<uint16_t>(udp_packet.GetLogicalAddress().at(0)) << 8) | 
+      uint16_t gate_way_address_ = (static_cast<uint16_t>(udp_packet.GetLogicalAddress().at(0)) << 8) | 
                           (static_cast<uint16_t>(udp_packet.GetLogicalAddress().at(1)));
+      if (GateWays_map_.find(gate_way_address_) == GateWays_map_.end()) {
+        return ;
+      }
+      GateWay* gate_way = GateWays_map_[gate_way_address_];
+      gate_way->vehicle_ip_ = client_addr;
+      gate_way->VIN = udp_packet.GetVIN();
       gate_way->EID = udp_packet.GetEID();
       gate_way->GID = udp_packet.GetGID();
       gate_way->FurtherActionRequired = udp_packet.GetFurtherActionRequied();
       GateWays_.push_back(gate_way);
       // GateWays_map_[addr_ip] = gate_way;
-      GateWays_map_.insert({gate_way->gate_way_address_, gate_way});
+      // GateWays_map_.insert({gate_way->gate_way_address_, gate_way});
       // udp_reply_cv_.notify_all();
       return;
     }
@@ -376,6 +380,9 @@ int DoIpClient::HandleTcpMessage(GateWay* gate_way) {
       } else {
         uint16_t ecu_address = (static_cast<uint16_t>(doip_tcp_message.payload_.at(0)) << 8) 
                               | (static_cast<uint16_t>(doip_tcp_message.payload_.at(1))); 
+        if (ecu_map_.find(ecu_address) == ecu_map_.end()) {
+          
+        }
         switch (doip_tcp_message.payload_type_) {
           case DoIpPayload::kRoutingActivationResponse: {
             CPRINT("kRoutingActivationResponse");
@@ -616,7 +623,10 @@ int DoIpClient::SendRoutingActivationRequest(GateWay* gate_way) {
 }
 
 ECUReplyCode DoIpClient::SendECUMeassage(uint16_t ecu_address, ByteVector uds, bool suppress_flag) {
-
+  // TODO: 检查address是ecu的地址
+  if (ecu_map_.find(ecu_address) == ecu_map_.end()) {
+    
+  }
   ECU* ecu = ecu_map_[ecu_address];
   if (ecu_thread_map_.find(ecu_address) == ecu_thread_map_.end()) {
     std::thread send_ecu_msg_thread(&DoIpClient::SendDiagnosticMessageThread, this,
@@ -632,12 +642,18 @@ ECUReplyCode DoIpClient::SendECUMeassage(uint16_t ecu_address, ByteVector uds, b
     ecu->send_again_cv_.notify_all();
   }
   std::unique_lock<std::mutex> lock(ecu->reply_Status_mutex_);
-  ecu->ecu_reply_status_cv_.wait(lock);
+  // TODO: 计时
+  ecu->ecu_reply_status_cv_.wait(lock); 
 
   return ecu_reply_status_map_[ecu_address];
 }
 
 void DoIpClient::SendDiagnosticMessageThread(uint16_t ecu_address) {
+  if (ecu_map_.find(ecu_address) == ecu_map_.end()) {
+    CPRINT("ecu_address is not find !\n");
+    return ;
+  }
+  // TODO: ecu不存在 处理
   ECU* ecu = ecu_map_[ecu_address];
   std::unique_lock<std::mutex> lock(ecu->thread_mutex_);
   while(true) {
@@ -650,6 +666,11 @@ void DoIpClient::SendDiagnosticMessageThread(uint16_t ecu_address) {
 }
 
 void DoIpClient::SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_data, int time_out) {
+  if (ecu_map_.find(ecu_address) == ecu_map_.end()) {
+    CPRINT("ecu_address is not find !\n");
+    return ;
+  }
+  // TODO: ecu不存在 处理
   ECU* ecu = ecu_map_[ecu_address];
   std::unique_lock<std::mutex> lock(ecu->write_mutex_);
   if (user_data.size() == 0) {
@@ -776,4 +797,21 @@ void DoIpClient::SetTimeOut(int time_vehicle_Id_req, int time_route_act_req,
   time_diagnostic_msg_ = time_diagnostic_msg;
   time_tester_present_req_ = time_tester_present_req;
   time_tester_present_thread_ = time_tester_present_thread;
+}
+
+
+void DoIpClient::GetAllGateWayAddress(std::vector<uint64_t>& gateway_addresses) {
+  for (auto gateway : GateWays_map_) {
+    gateway_addresses.push_back(gateway.second->gate_way_address_);
+  }
+}
+
+void DoIpClient::SetEcuGateWayMaps(uint16_t ecu_address, uint16_t gateway_address, int ecu_time_out) {
+  ECU* ecu = new ECU(ecu_address, ecu_time_out);
+  ecu->SetTimeOut(ecu_time_out);
+  GateWay* gateway = new GateWay(gateway_address);
+  ecu_gateway_map_.insert({ecu_address, gateway_address});
+  ecu_gateway_map_.insert({gateway_address, gateway_address});
+  GateWays_map_.insert({gateway_address, gateway});
+  ecu_map_.insert({ecu_address, ecu});
 }

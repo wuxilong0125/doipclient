@@ -62,13 +62,16 @@ class DoIpClient {
   //                   diagnostic_msg_nack{false}, diagnostic_msg_response{false};
   uint16_t source_address_, target_address_;
   bool tcp_tester_present_flag_ = false;
+  // 存储已响应的网关
   std::vector<GateWay*> GateWays_;
   
 
   int time_vehicle_Id_req_, time_route_act_req_, time_diagnostic_msg_, time_tester_present_req_, time_tester_present_thread_;
   std::mutex write_mtx;
-  // 网关和ECU的映射·
+  // 网关和ECU的映射 first: ecu  second: gateway 或 first: gateway  second: gateway
+  // 发送uds给出的address有可能是ecu的也有可能是gateway的
   std::map<uint16_t, uint16_t> ecu_gateway_map_;
+  
   std::map<uint16_t, GateWay*> GateWays_map_;
   std::map<uint16_t, ECU*> ecu_map_;
   std::map<uint16_t, pthread_t> ecu_thread_map_;
@@ -95,7 +98,6 @@ class DoIpClient {
   int HandleTcpMessage(GateWay* gate_way);
 
   void TesterPresentThread(GateWay* gate_way);
-  
   /**
    * @brief 处理TCP连接
    */
@@ -170,5 +172,12 @@ class DoIpClient {
    * @brief 设置数据报源地址
    */
   void SetSourceAddress(uint16_t s_addr);
+
+  void GetAllGateWayAddress(std::vector<uint64_t>& gateway_addresses);
+
+  /**
+   * @brief 根据配置填充ecu和gateway的映射
+   */
+  void SetEcuGateWayMaps(uint16_t ecu_address, uint16_t gateway_address, int ecu_time_out); 
 };
 #endif

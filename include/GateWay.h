@@ -26,9 +26,8 @@ class GateWay {
   std::string gate_way_ip_;
 
   bool GetRouteResponse() { return route_response; };
-  GateWay() {
-    // route_mutex_ = new std::mutex;
-    // route_response_cv_ = new std::condition_variable;
+  GateWay(uint16_t address) {
+    gate_way_address_ = address;
   }
   
   // GateWay(const GateWay& gate_way){

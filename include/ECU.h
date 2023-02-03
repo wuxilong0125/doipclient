@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <mutex>
+#include <atomic>
 #include <condition_variable>
 
 #include "Payload.h"
@@ -32,6 +33,7 @@ class ECU {
  public:
 
   ECU(uint16_t address, ByteVector uds, int timeout);
+  ECU(uint16_t address, int timeout);
   ~ECU();
   std::condition_variable send_again_cv_, ecu_reply_cv_, ecu_reply_status_cv_;
   std::mutex thread_mutex_, write_mutex_, reply_Status_mutex_;

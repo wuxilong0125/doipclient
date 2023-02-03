@@ -1,5 +1,5 @@
 /**
- * @brief 处理负载的用户数据报（usd）
+ * @brief 处理负载的用户数据报（uds）
  */
 
 #ifndef __UDS_MESSAGE_H__
