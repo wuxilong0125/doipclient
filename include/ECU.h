@@ -38,14 +38,14 @@ class ECU {
   std::condition_variable send_again_cv_, ecu_reply_cv_, ecu_reply_status_cv_;
   std::mutex thread_mutex_, write_mutex_, reply_Status_mutex_;
   int tcp_socket_ = -1;
-  inline void SetCallBack(ECUCallBack cb);
-  inline void SetAddress(uint16_t address);
-  inline void SetUds(ByteVector uds);
-  inline void SetTimeOut(int timeout);
+  inline void SetCallBack(ECUCallBack cb){ ecu_call_back_ = cb; };
+  inline void SetAddress(uint16_t address){ address_ = address; };
+  inline void SetUds(ByteVector uds){ uds_ = uds; };
+  inline void SetTimeOut(int timeout){ timeout_ = timeout; };
 
-  inline uint16_t GetAddress();
-  inline void GetUds(ByteVector &uds);
-  inline int GetTimeOut();
+  inline uint16_t GetAddress(){ return address_; };
+  inline void GetUds(ByteVector &uds){ uds = uds_; };
+  inline int GetTimeOut(){ return timeout_; };
   void RunCallBack();
 
   // std::mutex *GetMutex() { return mutex_; }

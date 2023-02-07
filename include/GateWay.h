@@ -26,6 +26,7 @@ class GateWay {
   std::string gate_way_ip_;
 
   bool GetRouteResponse() { return route_response; };
+  bool GetSocketStatus() { return is_tcp_socket_open_; }
   GateWay(uint16_t address) {
     gate_way_address_ = address;
   }
