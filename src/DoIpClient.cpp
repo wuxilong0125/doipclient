@@ -1,5 +1,3 @@
-#include "DoIpClient.h"
-
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <unistd.h>
@@ -11,6 +9,9 @@
 #include <thread>
 
 #include "MultiByteType.h"
+#include "DoIpClient.h"
+#include "VehicleTools.h"
+#include "CommonTools.h"
 
 // #define DEBUG
 #ifndef DEBUG
@@ -82,166 +83,10 @@ void DoIpClient::TimerCallBack(bool socket) {
 
   // CloseTcpConnection();
 }
-/**
- * @brief 获取主机所有Ip地址(与DoIp服务Ip在一个网段下)
- *
- * @return int
- */
-int DoIpClient::GetAllLocalIps() {
-  struct ifaddrs *ifAddrStruct = NULL;
-  void *tmpAddrPtr = NULL;
-  getifaddrs(&ifAddrStruct);
 
-  while (ifAddrStruct != NULL) {
-    if (ifAddrStruct->ifa_addr == NULL) {
-      ifAddrStruct = ifAddrStruct->ifa_next;
-      continue;
-    }
-    if (ifAddrStruct->ifa_addr->sa_family == AF_INET) {
-      tmpAddrPtr = &((struct sockaddr_in *)ifAddrStruct->ifa_addr)->sin_addr;
-      char addressBuffer[INET_ADDRSTRLEN];
-      inet_ntop(AF_INET, tmpAddrPtr, addressBuffer, INET_ADDRSTRLEN);
 
-      if (0 == std::strncmp(addressBuffer, server_ip_prefix_.c_str(),
-                            strlen(server_ip_prefix_.c_str()))) {
-        local_ips_.push_back(addressBuffer);
-        PRINT("push local_ip: %s\n", addressBuffer);
-      }
-    }
-    ifAddrStruct = ifAddrStruct->ifa_next;
-  }
-  if (local_ips_.size() == 0) {
-    return -1;
-  }
-  return 0;
-}
 
-int DoIpClient::FindTargetVehicleAddress() {
-  int re = GetAllLocalIps();
-  if (-1 == re) {
-    DEBUG("GetAllLocalIps ERROR.\n");
-    return -1;
-  }
-  
-  std::vector<int> udp_sockets(static_cast<int>(local_ips_.size()), -1);
 
-  for (int i = 0; i < local_ips_.size(); i++) {
-    PRINT("local_ip: %s\n", local_ips_[i].c_str());
-    re = SetUdpSocket(local_ips_[i].c_str(), udp_sockets[i]);
-    if (-1 == re) {
-      DEBUG("SetUdpSocket is error.\n");
-      return -1;
-    }
-    std::thread receive_udp_msg_thread(&DoIpClient::UdpHandler, this,
-                                       std::ref(udp_sockets[i]));
-    receive_udp_msg_thread.detach();
-    sockaddr_in broad_addr;
-    broad_addr.sin_family = AF_INET;
-    broad_addr.sin_port =
-        htons(kPort);  //将整形变量从主机字节序转变为网络字节序
-    inet_aton("255.255.255.255", &(broad_addr.sin_addr));
-    PRINT("udp_socket: %d\n", udp_sockets[i]);
-    re = SendVehicleIdentificationRequest(&broad_addr, udp_sockets[i]);
-    if (re == -1) {
-      DEBUG("Send SendVehicleIdentificationRequest ERROR.\n");
-      return -1;
-    }
-  }
-
-  // TODO: 修改
-  // for (int i = 0; i < (kTimeOut * 1000) / kTimeToSleep; i++) {
-  //   std::this_thread::sleep_for(std::chrono::milliseconds(kTimeToSleep));
-  // }
-  std::unique_lock<std::mutex> lock(udp_mutex_);
-  udp_reply_cv_.wait_for(lock, std::chrono::seconds(time_vehicle_Id_req_));
-
-  // TODO: 修改  GateWays_由配置文件给出
-  if (GateWays_.empty()) {
-    DEBUG("NO VehicleIdentificationResponse received.\n");
-    return -1;
-  }
-
-  // for (int i = 0; i < local_ips_.size(); i++) {
-  //   close(udp_sockets[i]);
-  //   free(udp_sockets[i]);
-  // }
-  CPRINT("end find.");
-  return 0;
-}
-
-int DoIpClient::SetUdpSocket(const char *ip, int &udpSockFd) {
-  if (ip == nullptr) return -1;
-  udpSockFd = socket(AF_INET, SOCK_DGRAM, 0);
-  if (udpSockFd < 0) {
-    return -1;
-  }
-  udp_sockaddr_.sin_family = AF_INET;
-  udp_sockaddr_.sin_port = htons(kPort);
-  udp_sockaddr_.sin_addr.s_addr = inet_addr(ip);
-  memset(&udp_sockaddr_.sin_zero, 0, 8);
-
-  int retval{bind(udpSockFd, (const sockaddr *)(&udp_sockaddr_),
-                  sizeof(struct sockaddr_in))};
-  if (retval < 0) {
-    PRINT("bind is error: %d\n", errno);
-    return -1;
-  }
-  return 0;
-}
-
-/**
- * @brief 接收udp数据
- *
- * @param udp_socket
- * @return int
- */
-
-void DoIpClient::UdpHandler(int &udp_socket) {
-  uint8_t received_udp_datas[kMaxDataSize];
-  struct sockaddr_in client_addr;
-  client_addr.sin_family = AF_INET;
-  client_addr.sin_port = htons(kPort);
-  client_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  socklen_t length(sizeof(struct sockaddr));
-  while (true) {
-    ssize_t bytes_received{recvfrom(udp_socket, received_udp_datas,
-                                    kMaxDataSize, 0,
-                                    (struct sockaddr *)&client_addr, &length)};
-    if (bytes_received <= 0) {
-      PRINT("recvfrom error: %d\n", errno);
-      return;
-    }
-    if (bytes_received > std::numeric_limits<uint8_t>::max()) {
-      return;
-    }
-    DoIpPacket udp_packet(DoIpPacket::kHost);
-    DoIpNackCodes re =
-        HandleUdpMessage(received_udp_datas, bytes_received, udp_packet);
-    if (DoIpNackCodes::kNoError == re &&
-        udp_packet.payload_type_ == DoIpPayload::kVehicleAnnouncement) {
-
-      uint16_t gate_way_address_ = (static_cast<uint16_t>(udp_packet.GetLogicalAddress().at(0)) << 8) | 
-                          (static_cast<uint16_t>(udp_packet.GetLogicalAddress().at(1)));
-      CPRINT("check gate_way address.");
-      if (GateWays_map_.find(gate_way_address_) == GateWays_map_.end()) {
-        CPRINT("ERROR: gate_way not find.");
-        return ;
-      }
-      std::shared_ptr<GateWay> gate_way = GateWays_map_[gate_way_address_];
-      gate_way->vehicle_ip_ = client_addr;
-      gate_way->VIN = udp_packet.GetVIN();
-      gate_way->EID = udp_packet.GetEID();
-      gate_way->GID = udp_packet.GetGID();
-      gate_way->FurtherActionRequired = udp_packet.GetFurtherActionRequied();
-      GateWays_.push_back(gate_way);
-      // GateWays_map_[addr_ip] = gate_way;
-      // GateWays_map_.insert({gate_way->gate_way_address_, gate_way});
-      // udp_reply_cv_.notify_all();
-      
-      return;
-    }
-  }
-}
 
 int DoIpClient::TcpHandler(std::shared_ptr<GateWay> gate_way) {
   if (inet_ntoa(gate_way->vehicle_ip_.sin_addr) == nullptr) {
@@ -304,49 +149,6 @@ void DoIpClient::ReconnectServer(std::shared_ptr<GateWay> gate_way) {
   CloseTcpConnection(gate_way);
   TcpHandler(gate_way);
 }
-/**
- * @brief 处理udp接收到的数据
- *
- * @param msg udp接收到的数据内容
- * @param bytes_available 数据大小
- * @param udp_packet DoIpPacket对象，用于填充udp数据
- * @return uint8_t 如果数据错误返回DoIpNackCodes中的对应值，否则返回0xFF
- */
-
-DoIpNackCodes DoIpClient::HandleUdpMessage(uint8_t msg[],
-                                           ssize_t bytes_available,
-                                           DoIpPacket &udp_packet) {
-  if (bytes_available < kDoIp_HeaderTotal_length) {
-    return DoIpNackCodes::kInvalidPayloadLength;
-  }
-  // ~会将小整型提升提升为较大的整型
-  if ((uint8_t)(~msg[kDoIp_ProtocolVersion_offset]) !=
-      msg[kDoIp_InvProtocolVersion_offset]) {
-    udp_packet.SetPayloadType(DoIpPayload::kGenericDoIpNack);
-    DEBUG("HandleUdpMessage_f: ProtocolVersion not equal to ProtocolVersion\n");
-    return DoIpNackCodes::kIncorrectPatternFormat;
-  }
-  DoIpPacket::PayloadLength expected_payload_length{bytes_available -
-                                                    kDoIp_HeaderTotal_length};
-  udp_packet.SetPayloadLength(expected_payload_length);
-  PRINT("udp packet type first value is 0x%02x\n",
-        msg[kDoIp_PayloadType_offset]);
-  PRINT("udp packet type second value is 0x%02x\n",
-        msg[kDoIp_PayloadType_offset + 1]);
-
-  udp_packet.SetPayloadType(msg[kDoIp_PayloadType_offset],
-                            msg[kDoIp_PayloadType_offset + 1]);
-  udp_packet.SetProtocolVersion(
-      DoIpPacket::ProtocolVersion(msg[kDoIp_ProtocolVersion_offset]));
-  DoIpNackCodes re = udp_packet.VerifyPayloadType();
-  if (DoIpNackCodes::kNoError != re) return re;
-  // 填充负载内容
-  for (int i = kDoIp_HeaderTotal_length; i < bytes_available; i++) {
-    udp_packet.payload_.at(i - kDoIp_HeaderTotal_length) = msg[i];
-  }
-
-  return DoIpNackCodes::kNoError;
-}
 
 int DoIpClient::HandleTcpMessage(std::shared_ptr<GateWay> gate_way) {
   CPRINT("START---------------------------------------------");
@@ -376,12 +178,6 @@ int DoIpClient::HandleTcpMessage(std::shared_ptr<GateWay> gate_way) {
       }
       continue;
     }
-
-
-    // if (!timer->IsRunning()) {
-    //   CPRINT("time-over.");
-    //   continue;
-    // }
 
     uint8_t v_code = doip_tcp_message.VerifyPayloadType();
 
@@ -458,141 +254,6 @@ int DoIpClient::HandleTcpMessage(std::shared_ptr<GateWay> gate_way) {
   }
 }
 
-int DoIpClient::SocketWrite(int socket, DoIpPacket &doip_packet,
-                            struct sockaddr_in *destination_address) {
-  if (socket < 0) {
-    DEBUG("SocketWrite's socket param ERROR.\n");
-    return -1;
-  }
-  DoIpPacket::ScatterArray scatter_array(doip_packet.GetScatterArray());
-  struct msghdr message_header;
-  if (destination_address != nullptr) {
-    // printf("broadaddr: %s \n", inet_ntoa(destination_address->sin_addr));
-    message_header.msg_name = destination_address;
-    message_header.msg_namelen = sizeof(sockaddr_in);
-  } else {
-    CPRINT("destination_address is null.");
-    return -1;
-  }
-  message_header.msg_iov = scatter_array.begin();
-  message_header.msg_iovlen = scatter_array.size();
-  message_header.msg_control = nullptr;
-  message_header.msg_controllen = 0;
-  message_header.msg_flags = 0;
-
-  // Briefly switch DoIpPacket to network byte order
-  doip_packet.Hton();
-
-  ssize_t bytesSent{sendmsg(socket, &message_header, 0)};
-  // printf("bytesSent: %d\n",bytesSent);
-  doip_packet.Ntoh();
-
-  if (bytesSent < 0) {
-    PRINT("sendmsg error : %d\n", errno);
-
-    return -1;
-  } else if (((size_t)bytesSent) <
-             (doip_packet.payload_length_ + kDoIp_HeaderTotal_length)) {
-    DEBUG("SocketWrite bytesSent is smaller than packet Length.\n");
-    return -1;
-  }
-  return 0;
-}
-
-int DoIpClient::SocketReadHeader(int socket, DoIpPacket &doip_packet) {
-  doip_packet.SetPayloadLength(0);
-  DoIpPacket::PayloadLength expected_payload_length{
-      doip_packet.payload_length_};
-  DoIpPacket::ScatterArray scatter_arry(doip_packet.GetScatterArray());
-  struct msghdr message_header;
-  message_header.msg_name = NULL;
-  message_header.msg_namelen = 0;
-  message_header.msg_iov = scatter_arry.begin();
-  message_header.msg_iovlen = scatter_arry.size();
-  message_header.msg_control = nullptr;
-  message_header.msg_controllen = 0;
-  message_header.msg_flags = 0;
-  doip_packet.Hton();
-  ssize_t bytesReceived{recvmsg(socket, &message_header, 0)};
-  if (bytesReceived == 0) return 0;
-  if (bytesReceived < 0) {
-    CPRINT("ERROR: " + std::to_string(errno));
-    return -1;
-  }
-  if (bytesReceived < ((ssize_t)kDoIp_HeaderTotal_length)) {
-    CPRINT(" Incomplete DoIp Header received.");
-    return -1;
-  }
-
-  if (bytesReceived > ((ssize_t)kDoIp_HeaderTotal_length)) {
-    CPRINT("Extra Payload bytes read for DoIp Packet.");
-    return -1;
-  }
-
-  return bytesReceived;
-}
-
-int DoIpClient::SocketReadPayload(int socket, DoIpPacket &doip_packet) {
-  if (socket < 0) {
-    CPRINT("socket is error");
-    return -1;
-  }
-  DoIpPacket::PayloadLength buffer_fill(0);
-
-  // while ((buffer_fill < doip_packet.payload_.size()) && timer->IsRunning()) {
-    while ((buffer_fill < doip_packet.payload_.size())) {
-    ssize_t bytedRead{recv(socket, &(doip_packet.payload_.at(buffer_fill)),
-                           (doip_packet.payload_.size() - buffer_fill), 0)};
-    if (bytedRead < 0) {
-      if ((errno == EWOULDBLOCK) || (errno == EAGAIN) || (errno == EINTR)) {
-        continue;
-      }
-      CPRINT("recv ERROR :" + std::to_string(errno));
-      break;
-    }
-    if (bytedRead == 0) {
-      break;
-    }
-    buffer_fill += bytedRead;
-  };
-  if (buffer_fill != doip_packet.payload_.size()) {
-    CPRINT("ERROR: recv 超时！");
-    return -1;
-  }
-  return 0;
-}
-
-int DoIpClient::SendVehicleIdentificationRequest(
-    struct sockaddr_in *destination_address, int udp_socket) {
-  if (destination_address == nullptr) {
-    DEBUG("destination_address is null.\n");
-    return -1;
-  }
-  int broadcast = 1;
-  int socket_error = setsockopt(udp_socket, SOL_SOCKET, SO_BROADCAST,
-                                &broadcast, sizeof(broadcast));
-  if (-1 == socket_error) {
-    DEBUG("setsockopt(broadcast) is error.\n");
-    return -1;
-  }
-  // TODO: 设置超时接口
-  struct timeval tv;
-  tv.tv_sec = time_vehicle_Id_req_;
-  tv.tv_usec = 0;
-  socket_error =
-      setsockopt(udp_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-  if (-1 == socket_error) {
-    DEBUG("setsockopt(timeout) is error.\n");
-    return -1;
-  }
-  DoIpPacket vehicle_Id_request(DoIpPacket::kHost);
-  vehicle_Id_request.ConstructVehicleIdentificationRequest();
-  int re = SocketWrite(udp_socket, vehicle_Id_request, destination_address);
-  if (0 == re)
-    return 0;
-  else
-    return -1;
-}
 
 void DoIpClient::SetCallBack(DiagnosticMessageCallBack diag_msg_cb) {
   diag_msg_cb_ = diag_msg_cb;
@@ -657,12 +318,12 @@ int DoIpClient::SendRoutingActivationRequest(std::shared_ptr<GateWay> gate_way) 
   return 0;
 }
 
-ECUReplyCode DoIpClient::SendECUMeassage(uint16_t ecu_address, ByteVector uds, bool suppress_flag) {
+ECUReplyCode DoIpClient::SendECUMeassage(uint16_t ecu_address, ByteVector uds) {
   // TODO: 检查address是ecu的地址
-  if (ecu_map_.find(ecu_address) == ecu_map_.end()) {
-    CPRINT("ecu_address is not find !\n");
-    return ECUReplyCode::kSendError;
-  }
+  // if (ecu_map_.find(ecu_address) == ecu_map_.end()) {
+  //   CPRINT("ecu_address is not find !\n");
+  //   return ECUReplyCode::kSendError;
+  // }
   std::shared_ptr<ECU> ecu = ecu_map_[ecu_address];
   
   ecu->SetUds(uds);
@@ -744,7 +405,8 @@ void DoIpClient::SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_dat
     ecu->SetDiagnosticResponse(false);
   }
   // timer->StartOnce(timeout);
-  int re = SocketWrite(gateway->tcp_socket_, diagnostic_msg, &vehicle_ip_);
+  // TODO: 修改了&gateway->vehicle_ip_
+  int re = SocketWrite(gateway->tcp_socket_, diagnostic_msg, &gateway->vehicle_ip_);
   if (-1 == re) {
     ecu_reply_status_map_.insert({ecu_address, ECUReplyCode::kSendError});
     ecu->ecu_reply_status_cv_.notify_all();
@@ -760,7 +422,6 @@ void DoIpClient::SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_dat
   // while (!diagnostic_msg_ack && timer->IsRunning()) {
   //   usleep(inter_us);
   // }
-
 
   if (ecu->GetDiagnosticAck()) {
     ecu_reply_status_map_.insert({ecu_address, ECUReplyCode::kACK});
@@ -800,8 +461,8 @@ void DoIpClient::SendTesterRequest(std::shared_ptr<GateWay> gate_way) {
   if (gate_way->diagnostic_msg_ack) {
     gate_way->diagnostic_msg_ack = false;
   }
-
-  int re = SocketWrite(gate_way->tcp_socket_, tester_present_request, &vehicle_ip_);
+  // TODO: 修改了 &gate_way->vehicle_ip_
+  int re = SocketWrite(gate_way->tcp_socket_, tester_present_request, &gate_way->vehicle_ip_);
   if (-1 == re) {
 
     PRINT("SendTesterRequest ERROR, {}", strerror(errno));
@@ -823,32 +484,8 @@ void DoIpClient::SendTesterRequest(std::shared_ptr<GateWay> gate_way) {
 void DoIpClient::SetSourceAddress(uint16_t s_addr) { source_address_ = s_addr; }
 
 
-
-void DoIpClient::SetTimeOut(int time_vehicle_Id_req, int time_route_act_req,
-                            int time_diagnostic_msg,
-                            int time_tester_present_req,
-                            int time_tester_present_thread) {
-  time_vehicle_Id_req_ = time_vehicle_Id_req;
-  time_route_act_req_ = time_route_act_req;
-  time_diagnostic_msg_ = time_diagnostic_msg;
-  time_tester_present_req_ = time_tester_present_req;
-  time_tester_present_thread_ = time_tester_present_thread;
-}
-
-
 void DoIpClient::GetAllGateWayAddress(std::vector<uint64_t>& gateway_addresses) {
   for (auto gateway : GateWays_map_) {
     gateway_addresses.push_back(gateway.second->gate_way_address_);
   }
-}
-
-void DoIpClient::SetEcuGateWayMaps(uint16_t ecu_address, uint16_t gateway_address, int ecu_time_out) {
-  // ECU* ecu = new ECU(ecu_address, ecu_time_out);
-  auto ecu = std::make_shared<ECU>(ecu_address, ecu_time_out);
-  auto gateway = std::make_shared<GateWay>(gateway_address);
-  // GateWay* gateway = new GateWay(gateway_address);
-  ecu_gateway_map_.insert({ecu_address, gateway_address});
-  ecu_gateway_map_.insert({gateway_address, gateway_address});
-  GateWays_map_.insert({gateway_address, gateway});
-  ecu_map_.insert({ecu_address, ecu});
 }

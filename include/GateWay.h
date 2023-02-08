@@ -30,6 +30,13 @@ class GateWay {
   GateWay(uint16_t address) {
     gate_way_address_ = address;
   }
+  GateWay(struct sockaddr_in ip,  std::string vin, ByteVector eid, ByteVector gid, uint8_t fur) {
+    vehicle_ip_ = ip;
+    VIN = vin;
+    EID.assign(eid.begin(), eid.end());
+    GID.assign(gid.begin(), gid.end());
+    FurtherActionRequired = fur;
+  }
   
   // GateWay(const GateWay& gate_way){
   //   this->vehicle_ip_ = gate_way.vehicle_ip_;

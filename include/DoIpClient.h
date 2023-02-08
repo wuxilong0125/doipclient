@@ -25,34 +25,23 @@
 class CTimer;
 using DiagnosticMessageCallBack = std::function<void(unsigned char *, int)>;
 static const in_port_t kPort = 13400;
-static const int kMaxDataSize = 8092;
+// static const int kMaxDataSize = 8092;
 // static const int kTimeOut = 6;
-static const int kTimeToSleep = 200;  // milliseconds
+static const int kTimeToSleep = 200;  // millisecondss
 
-// struct vechicle_msg {
-//   struct sockaddr_in vehicle_ip;
-//   std::string VIN;
-//   ByteVector EID;
-//   ByteVector GID;
-//   ByteVector LogicalAddress;
-//   uint8_t FurtherActionRequired;
-// };
 class DoIpClient {
  private:
-  std::mutex udp_mutex_;
-  std::condition_variable udp_reply_cv_;
-  struct sockaddr_in vehicle_ip_;
-  // int tcp_socket_ = -1;
-  int udp_socket_ = -1;
+  // std::mutex udp_mutex_;
+  // std::condition_variable udp_reply_cv_;
+  // struct sockaddr_in vehicle_ip_;
 
   // bool is_tcp_socket_open_{false};
   
-  std::string server_ip_prefix_ = "169.254.";
   // std::vector<std::thread> threads_;
 
   // std::thread tcp_handler_thread_;
-  std::vector<std::string> local_ips_;
-  struct sockaddr_in udp_sockaddr_, tcp_sockaddr_;
+  // std::vector<std::string> local_ips_;
+  struct sockaddr_in tcp_sockaddr_;
   
   // TODO: 修改为智能指针
   CTimer *timer, *tester_present_timer;
@@ -69,7 +58,7 @@ class DoIpClient {
   // std::vector<GateWay*> GateWays_;
   std::vector<std::shared_ptr<GateWay>> GateWays_;
 
-  int time_vehicle_Id_req_, time_route_act_req_, time_diagnostic_msg_, time_tester_present_req_, time_tester_present_thread_;
+  int time_route_act_req_, time_diagnostic_msg_, time_tester_present_req_, time_tester_present_thread_;
   std::mutex write_mtx;
   // 网关和ECU的映射 first: ecu  second: gateway 或 first: gateway  second: gateway
   // 发送uds给出的address有可能是ecu的也有可能是gateway的
@@ -83,11 +72,6 @@ class DoIpClient {
   DoIpClient();
   ~DoIpClient();
 
-
-  void SetTimeOut(int time_vehicle_Id_req, int time_route_act_req, 
-                            int time_diagnostic_msg, int time_tester_present_req, 
-                            int time_tester_present_thread);
-
   /**
    * @brief 获取已经响应的GateWay信息
    * 
@@ -96,15 +80,7 @@ class DoIpClient {
   void GetGateWayInfo(std::vector<std::shared_ptr<GateWay>>& GateWays) {
     GateWays.assign(GateWays_.begin(), GateWays_.end());
   }
-  
-  /**
-   * @brief 获取所有本机的IP地址
-   */
-  int GetAllLocalIps();
-  /**
-   * @brief 查找目标车辆IP地址
-   */
-  int FindTargetVehicleAddress();
+
   /**
    * @brief 接收处理TCP数据报
    */
@@ -123,38 +99,6 @@ class DoIpClient {
    * @brief TCP重连
    */
   void ReconnectServer(std::shared_ptr<GateWay> gate_way);
-  /**
-   * @brief 设置目标服务的IP前缀
-   */
-  inline void SetServerIpPrefix(std::string ip) { server_ip_prefix_ = ip; }
-  /**
-   * @brief 设置UDP套接字
-   */
-  int SetUdpSocket(const char *ip, int &udpSockFd);
-  /**
-   * @brief 处理UDP连接
-   */
-  void UdpHandler(int &udp_socket);
-
-  /**
-   * @brief 接收处理UDP数据报
-   */
-  DoIpNackCodes HandleUdpMessage(uint8_t msg[], ssize_t length,
-                           DoIpPacket &udp_packet);
-
-  /**
-   * @brief 封装发送数据报功能
-   */
-  int SocketWrite(int socket, DoIpPacket &doip_packet,
-                  struct sockaddr_in *destination_address);
-  /**
-   * @brief 封装接收数据报头部功能
-   */
-  int SocketReadHeader(int socket, DoIpPacket &doip_packet);
-  /**
-   * @brief 封装接收数据报负载功能
-   */
-  int SocketReadPayload(int socket, DoIpPacket &doip_packet);
 
   /**
    * @brief 计时器回调函数
@@ -165,11 +109,7 @@ class DoIpClient {
    * @brief 设置回调函数
    */
   void SetCallBack(DiagnosticMessageCallBack diag_msg_cb);
-  /**
-   * @brief 发送车辆识别请求报文
-   */
-  int SendVehicleIdentificationRequest(struct sockaddr_in *destination_address,
-                                       int udp_socket);
+
   /**
    * @brief 发送路由激活请求
    */
@@ -179,7 +119,7 @@ class DoIpClient {
    */
   void SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_data, int time_out);
   void SendTesterRequest(std::shared_ptr<GateWay> gate_way);
-  ECUReplyCode SendECUMeassage(uint16_t ecu_address, ByteVector uds, bool suppress_flag);
+  ECUReplyCode SendECUMeassage(uint16_t ecu_address, ByteVector uds);
   void SendDiagnosticMessageThread(uint16_t ecu_address);
   /**
    * @brief 设置数据报源地址
@@ -188,9 +128,5 @@ class DoIpClient {
 
   void GetAllGateWayAddress(std::vector<uint64_t>& gateway_addresses);
 
-  /**
-   * @brief 根据配置填充ecu和gateway的映射
-   */
-  void SetEcuGateWayMaps(uint16_t ecu_address, uint16_t gateway_address, int ecu_time_out); 
 };
 #endif

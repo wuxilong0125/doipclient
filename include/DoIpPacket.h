@@ -142,7 +142,7 @@ enum DoIpRoutingActivationResponseCodes : uint8_t {
 
 class DoIpPacket : public PayloadOwner<uint32_t> {
  public:
-  // typedef std::array<struct iovec, kDoIp_HeaderTotal_fields> ScatterArray;
+
   typedef std::array<struct iovec, kDoIp_HeaderTotal_fields> ScatterArray;
   enum ByteOrder {
     kHost,
