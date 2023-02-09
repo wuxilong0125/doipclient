@@ -8,11 +8,20 @@
 #include <condition_variable>
 
 #include "Payload.h"
+
+enum GateWayReplyCode : uint8_t {
+  kACK = 0x01,
+  kNACK = 0x02,
+  kResp = 0x03,
+  kTimeOut = 0x04,
+  kSendError = 0xff
+};
 class GateWay { 
  public:
   struct sockaddr_in vehicle_ip_;
-  std::mutex route_mutex_, write_mutex_;
-  std::condition_variable route_response_cv_, tester_present_response_;
+  std::mutex route_mutex_, write_mutex_, thread_mutex_, reply_Status_mutex_;
+  std::condition_variable route_response_cv_, tester_present_response_, 
+                          send_again_cv_, gateway_reply_cv_, gateway_reply_status_cv_;
   int tcp_socket_ = -1;
   std::string VIN;
   ByteVector EID;
@@ -24,9 +33,10 @@ class GateWay {
   bool route_response{false};
   bool diagnostic_msg_ack{false};
   std::string gate_way_ip_;
+  std::atomic<bool> send_diagnostic_again_{true}, diagnostic_msg_ack_{false}, diagnostic_msg_nack_{false}, diagnostic_msg_response_{false}, diagnostic_msg_time_out_{false};
+
 
   bool GetRouteResponse() { return route_response; };
-  bool GetSocketStatus() { return is_tcp_socket_open_; }
   GateWay(uint16_t address) {
     gate_way_address_ = address;
   }
@@ -37,30 +47,24 @@ class GateWay {
     GID.assign(gid.begin(), gid.end());
     FurtherActionRequired = fur;
   }
-  
-  // GateWay(const GateWay& gate_way){
-  //   this->vehicle_ip_ = gate_way.vehicle_ip_;
-  //   this->route_mutex_ = gate_way.route_mutex_;
-  //   this->route_response_cv_ = gate_way.route_response_cv_;
-  //   this->tcp_socket_ = gate_way.tcp_socket_;
-  //   this->VIN = gate_way.VIN;
-  //   this->EID = gate_way.EID;
-  //   this->GID = gate_way.GID;
-  //   this->Address_ = gate_way.Address_;
-  //   this->FurtherActionRequired = gate_way.FurtherActionRequired;
-  //   this->tcp_tester_present_flag_ = gate_way.tcp_tester_present_flag_;
-  //   this->is_tcp_socket_open_ = false;
-  //   this->route_response = gate_way.route_response;
-  //   this->gate_way_ip_ = gate_way.gate_way_ip_;
-  // }
-
-  // GateWay& operator=(GateWay& gate_way) {
-  //   GateWay(gate_way);
-  // }
-
   ~GateWay() {
-
   }
+
+
+  bool GetSendAgain() { return send_diagnostic_again_; }
+  bool GetDiagnosticAck() { return diagnostic_msg_ack_; }
+  bool GetDiagnosticNack() { return diagnostic_msg_nack_; }
+  bool GetDiagnosticResponse() { return diagnostic_msg_response_; }
+  bool GetDiagnosticTimeOut() { return diagnostic_msg_time_out_; }
+  bool GetSocketStatus() { return is_tcp_socket_open_; }
+
+
+  void SetSendAgain(bool flag) { send_diagnostic_again_ = flag; }
+  void SetDiagnosticAck(bool flag) { diagnostic_msg_ack_ = flag;}
+  void SetDiagnosticNack(bool flag) { diagnostic_msg_nack_ = flag;}
+  void SetDiagnosticResponse(bool flag) { diagnostic_msg_response_ = flag;}
+  void SetDiagnosticTimeOut(bool flag) { diagnostic_msg_time_out_ = flag; }
+  void SetTcpStatus(bool flag) { is_tcp_socket_open_ = flag; }  
 };
 
 

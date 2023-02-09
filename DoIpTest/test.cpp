@@ -34,17 +34,17 @@ int main() {
     // 源地址要自己设置吗？
     client.SetSourceAddress(0x0064);
     client.SendRoutingActivationRequest(gateway);
-    
+    // gateway->SetSendAgain(false);
     // TODO: 发送给网关就行， 不需要指定ECU
-    client.SendECUMeassage(0x000a, uds_1);
-    client.SendECUMeassage(0x000a, uds_2);
+    client.SendECUMeassage(gateway, uds_1);
+    // sleep(1);
+    client.SendECUMeassage(gateway, uds_2);
     sleep(2);
     // client.TesterPresentThread(gateway);
   }
   #else
   FindTargetVehicleAddress(VehicleGateWays);
-  
   #endif
-  
+
 	return 0;	
 }

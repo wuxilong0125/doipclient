@@ -25,9 +25,7 @@
 class CTimer;
 using DiagnosticMessageCallBack = std::function<void(unsigned char *, int)>;
 static const in_port_t kPort = 13400;
-// static const int kMaxDataSize = 8092;
-// static const int kTimeOut = 6;
-static const int kTimeToSleep = 200;  // millisecondss
+
 
 class DoIpClient {
  private:
@@ -58,16 +56,15 @@ class DoIpClient {
   // std::vector<GateWay*> GateWays_;
   std::vector<std::shared_ptr<GateWay>> GateWays_;
 
-  int time_route_act_req_, time_diagnostic_msg_, time_tester_present_req_, time_tester_present_thread_;
+  const int time_route_act_req_ = 2, time_diagnostic_msg_ = 2, time_tester_present_req_ = 2, time_tester_present_thread_ = 2;
   std::mutex write_mtx;
-  // 网关和ECU的映射 first: ecu  second: gateway 或 first: gateway  second: gateway
-  // 发送uds给出的address有可能是ecu的也有可能是gateway的
-  std::map<uint16_t, uint16_t> ecu_gateway_map_;
   
   std::map<uint16_t, std::shared_ptr<GateWay>> GateWays_map_;
-  std::map<uint16_t, std::shared_ptr<ECU>> ecu_map_;
-  std::map<uint16_t, pthread_t> ecu_thread_map_;
-  std::map<uint16_t, ECUReplyCode> ecu_reply_status_map_;
+  // std::map<uint16_t, std::shared_ptr<ECU>> ecu_map_;
+  std::map<uint16_t, pthread_t> gateway_thread_map_;
+  std::map<uint16_t, GateWayReplyCode> gateway_reply_status_map_;
+
+  ByteVector uds_;
  public:
   DoIpClient();
   ~DoIpClient();
@@ -117,10 +114,10 @@ class DoIpClient {
   /**
    * @brief 发送诊断数据报
    */
-  void SendDiagnosticMessage(uint16_t ecu_address, ByteVector user_data, int time_out);
+  void SendDiagnosticMessage(std::shared_ptr<GateWay> gate_way, ByteVector user_data);
   void SendTesterRequest(std::shared_ptr<GateWay> gate_way);
-  ECUReplyCode SendECUMeassage(uint16_t ecu_address, ByteVector uds);
-  void SendDiagnosticMessageThread(uint16_t ecu_address);
+  GateWayReplyCode SendECUMeassage(std::shared_ptr<GateWay> gate_way, ByteVector uds);
+  void SendDiagnosticMessageThread(std::shared_ptr<GateWay> gate_way);
   /**
    * @brief 设置数据报源地址
    */

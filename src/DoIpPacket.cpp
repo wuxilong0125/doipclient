@@ -161,25 +161,24 @@ void DoIpPacket::ConstructDiagnosticMessage(uint16_t source_address, uint16_t ta
   SetProtocolVersion(DoIpProtocolVersions::kDoIpIsoDis13400_2_2012);
   SetPayloadType(DoIpPayload::kDiagnosticMessage);
   SetPayloadLength(static_cast<uint32_t>(2+2+user_data.size()));
-  printf("source address & target address: 0x%04x, 0x%04x\n",source_address, target_address);
-  printf("payload_length_: %d\n",payload_length_);
-  printf("user_data size: %d\n",user_data.size());
+  // printf("source address & target address: 0x%04x, 0x%04x\n",source_address, target_address);
+  // printf("payload_length_: %d\n",payload_length_);
+  // printf("user_data size: %d\n",user_data.size());
   payload_.reserve(payload_length_);
   payload_.at(0) = GetByte(source_address, 1);
-  // printf("1\n");
   payload_.at(1) = GetByte(source_address, 0);
-  // printf("2\n");
   payload_.at(2) = GetByte(target_address, 1);
-  // printf("3\n");
   payload_.at(3) = GetByte(target_address, 0);
-  // printf("4\n");
   payload_.insert(payload_.begin() + 4, user_data.begin(), user_data.end());
-  // printf("error: %s\n",std::to_string(errno));
   payload_.erase(payload_.begin() + 4 + user_data.size(), payload_.end());
-  printf("6\n");
 }
 
 
+void DoIpPacket::ConstructAliveCheckRequest() {
+  SetProtocolVersion(DoIpProtocolVersions::kDoIpIsoDis13400_2_2012);
+  SetPayloadType(DoIpPayload::kAliveCheckRequest);
+  SetPayloadLength(0);
+}
 
 void DoIpPacket::SetPayloadType(uint8_t u_1, uint8_t u_2) {
   PayloadType type;

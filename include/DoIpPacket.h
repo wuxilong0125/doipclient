@@ -226,6 +226,8 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
    */
   void ConstructDiagnosticMessage(uint16_t source_address, uint16_t target_address, ByteVector user_data);
 
+  void ConstructAliveCheckRequest();
+
   ScatterArray GetScatterArray();
   void PrintPacketByte();
 };
