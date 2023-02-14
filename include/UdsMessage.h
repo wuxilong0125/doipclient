@@ -27,21 +27,21 @@ class UdsMessage : public PayloadOwner<uint16_t> {
   typedef std::vector<uint8_t> ByteVector;
 
  private:
-  AddressType source_address_;
-  AddressType target_address_;
+  AddressType m_sourceAddress;
+  AddressType m_targetAddress;
 
  public:
-  UdsMessage(const AddressType source_address, const AddressType target_address,
+  UdsMessage(const AddressType sourceAddress, const AddressType targetAddress,
              const ByteVector& payload);
-  UdsMessage(const AddressType source_address,
-             const AddressType target_address);
+  UdsMessage(const AddressType sourceAddress,
+             const AddressType targetAddress);
 
   template <typename InputIterator>
-  UdsMessage(const AddressType source_address, const AddressType target_address,
+  UdsMessage(const AddressType sourceAddress, const AddressType targetAddress,
              InputIterator begin, const InputIterator& end)
       : PayloadOwner<uint16_t>(begin, end),
-        source_address_(source_address),
-        target_address_(target_address) {}
+        m_sourceAddress(sourceAddress),
+        m_targetAddress(targetAddress) {}
   virtual ~UdsMessage();
 
   /**
@@ -49,23 +49,23 @@ class UdsMessage : public PayloadOwner<uint16_t> {
    *
    * @return AddressType
    */
-  inline AddressType GetSa() const { return source_address_; }
+  inline AddressType GetSa() const { return m_sourceAddress; }
 
   /**
    * @brief set the target address
    *
    * @param source_address
    */
-  inline void SetSa(const AddressType address) { source_address_ = address; }
+  inline void SetSa(const AddressType address) { m_sourceAddress = address; }
 
   /**
    * @brief Get the Target address
    *
    * @return AddressType
    */
-  inline AddressType GetTa() const { return target_address_; }
+  inline AddressType GetTa() const { return m_targetAddress; }
 
-  inline void SetTa(const AddressType address) { target_address_ = address; }
+  inline void SetTa(const AddressType address) { m_targetAddress = address; }
   /**
    * @brief Get a bool flag whether message is negative response or not
    *
@@ -82,22 +82,22 @@ class UdsMessage : public PayloadOwner<uint16_t> {
    * @return uint8_t
    */
   inline uint8_t GetSid() const {
-    if (payload_.size() > 0) {
-      return payload_.at(kUdsPayloadSidOffset);
+    if (m_payload.size() > 0) {
+      return m_payload.at(kUdsPayloadSidOffset);
     } else {
       throw std::out_of_range("UdsMessage Payload has insufficient size.");
     }
   }
 
   inline uint16_t GetTotalLength() {
-    return (sizeof(source_address_) + sizeof(target_address_) + GetSize());
+    return (sizeof(m_sourceAddress) + sizeof(m_targetAddress) + GetSize());
   }
   /**
    * \brief Create a response message with source & target address.
    * \return The uds response message.
    */
   inline UdsMessage CreateResponse() const {
-    UdsMessage response{this->target_address_, this->source_address_};
+    UdsMessage response{this->m_targetAddress, this->m_sourceAddress};
     return response;
   }
 }; 

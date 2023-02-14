@@ -5,10 +5,10 @@ DoIpClient client;
 
 
 
-void diagMsgCb(unsigned char *usd, int len) {
+void diagMsgCb(ByteVector usd) {
   printf("reveive Diagnostic Message: \n");
-  printf("len: %d\n", len);
-  for (int i = 0; i < len; i++) {
+
+  for (int i = 0; i < usd.size(); i++) {
     printf("0x%02X ", usd[i]);
   }
   printf("\n");
@@ -20,27 +20,23 @@ std::vector<std::shared_ptr<GateWay>> VehicleGateWays;
 int main() {
   std::cout << "START-------------------------------------------" << std::endl;
   #if 1
-  // client.SetEcuGateWayMaps(0x000a, 0x0010, 500);
 	client.SetCallBack(diagMsgCb);
 	FindTargetVehicleAddress(VehicleGateWays);
-  // std::vector<std::shared_ptr<GateWay>> GateWays;
-  // client.GetGateWayInfo(GateWays);
   for (auto gateway : VehicleGateWays) {
-    int re = client.TcpHandler(gateway);
+    client.SetTargetIp(gateway);
+    int re = client.TcpHandler();
     if (-1 == re) {
       std::cout << "TcpHandler ERROR " << std::endl;
       return 0;
     }
-    // 源地址要自己设置吗？
     client.SetSourceAddress(0x0064);
-    client.SendRoutingActivationRequest(gateway);
-    // gateway->SetSendAgain(false);
-    // TODO: 发送给网关就行， 不需要指定ECU
-    client.SendECUMeassage(gateway, uds_1);
-    // sleep(1);
-    client.SendECUMeassage(gateway, uds_2);
-    sleep(2);
-    // client.TesterPresentThread(gateway);
+    client.SendRoutingActivationRequest();
+    int k = 10;
+    // while(k --) {
+      client.SendECUMeassage(0x000a, uds_1);
+      client.SendECUMeassage(0x000a, uds_2);
+      sleep(1);
+    // }
   }
   #else
   FindTargetVehicleAddress(VehicleGateWays);

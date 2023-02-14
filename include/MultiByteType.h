@@ -8,11 +8,11 @@
  *
  */
 template <typename T>
-uint8_t GetByte(const T& value, size_t byte_offset) {
-  if (byte_offset >= sizeof(T)) {
+uint8_t GetByte(const T& value, size_t byteOffset) {
+  if (byteOffset >= sizeof(T)) {
     throw std::out_of_range("MultiByteType byte_offset out of range");
   }
-  return ((value >> (byte_offset * 8)) & 0xFF);
+  return ((value >> (byteOffset * 8)) & 0xFF);
 }
 
 /**
@@ -20,17 +20,17 @@ uint8_t GetByte(const T& value, size_t byte_offset) {
  *
  */
 template <typename T>
-void SetByte(T& value, const uint8_t byte_value, const size_t byte_offset) {
-  if (byte_offset >= sizeof(T)) {
+void SetByte(T& value, const uint8_t byteValue, const size_t byteOffset) {
+  if (byteOffset >= sizeof(T)) {
     throw std::out_of_range("MultiByteType byte_offset out of range");
   }
   T clear_mask(0);
-  clear_mask = (0xFF << (byte_offset * 8));
+  clear_mask = (0xFF << (byteOffset * 8));
   clear_mask = ~clear_mask;
   value &= clear_mask;
 
-  T temp(byte_value);
-  temp <<= byte_offset * 8;
+  T temp(byteValue);
+  temp <<= byteOffset * 8;
   value |= temp;
 }
 

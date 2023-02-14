@@ -9,20 +9,20 @@
 
 #include "Payload.h"
 
-enum GateWayReplyCode : uint8_t {
-  kACK = 0x01,
-  kNACK = 0x02,
-  kResp = 0x03,
-  kTimeOut = 0x04,
-  kSendError = 0xff
-};
+// enum GateWayReplyCode : uint8_t {
+//   kACK = 0x01,
+//   kNACK = 0x02,
+//   kResp = 0x03,
+//   kTimeOut = 0x04,
+//   kSendError = 0xff
+// };
 class GateWay { 
  public:
   struct sockaddr_in vehicle_ip_;
-  std::mutex route_mutex_, write_mutex_, thread_mutex_, reply_Status_mutex_;
-  std::condition_variable route_response_cv_, tester_present_response_, 
-                          send_again_cv_, gateway_reply_cv_, gateway_reply_status_cv_;
-  int tcp_socket_ = -1;
+  // std::mutex route_mutex_, write_mutex_, thread_mutex_, reply_Status_mutex_;
+  // std::condition_variable route_response_cv_, tester_present_response_, 
+  //                         send_again_cv_, gateway_reply_cv_, gateway_reply_status_cv_;
+  // int tcp_socket_ = -1;
   std::string VIN;
   ByteVector EID;
   ByteVector GID;
@@ -31,9 +31,10 @@ class GateWay {
   bool tcp_tester_present_flag_ = false;
   bool is_tcp_socket_open_ = false;
   bool route_response{false};
-  bool diagnostic_msg_ack{false};
+
+  // bool is_reply_{false};
   std::string gate_way_ip_;
-  std::atomic<bool> send_diagnostic_again_{true}, diagnostic_msg_ack_{false}, diagnostic_msg_nack_{false}, diagnostic_msg_response_{false}, diagnostic_msg_time_out_{false};
+  // std::atomic<bool> send_diagnostic_again_{true}, diagnostic_msg_ack_{false}, diagnostic_msg_nack_{false}, diagnostic_msg_response_{false}, diagnostic_msg_time_out_{false};
 
 
   bool GetRouteResponse() { return route_response; };
@@ -51,20 +52,22 @@ class GateWay {
   }
 
 
-  bool GetSendAgain() { return send_diagnostic_again_; }
-  bool GetDiagnosticAck() { return diagnostic_msg_ack_; }
-  bool GetDiagnosticNack() { return diagnostic_msg_nack_; }
-  bool GetDiagnosticResponse() { return diagnostic_msg_response_; }
-  bool GetDiagnosticTimeOut() { return diagnostic_msg_time_out_; }
-  bool GetSocketStatus() { return is_tcp_socket_open_; }
+  // bool GetSendAgain() { return send_diagnostic_again_; }
+  // bool GetDiagnosticAck() { return diagnostic_msg_ack_; }
+  // bool GetDiagnosticNack() { return diagnostic_msg_nack_; }
+  // bool GetDiagnosticResponse() { return diagnostic_msg_response_; }
+  // bool GetDiagnosticTimeOut() { return diagnostic_msg_time_out_; }
+  // bool GetSocketStatus() { return is_tcp_socket_open_; }
+  // bool GetReply() { return is_reply_; }
 
 
-  void SetSendAgain(bool flag) { send_diagnostic_again_ = flag; }
-  void SetDiagnosticAck(bool flag) { diagnostic_msg_ack_ = flag;}
-  void SetDiagnosticNack(bool flag) { diagnostic_msg_nack_ = flag;}
-  void SetDiagnosticResponse(bool flag) { diagnostic_msg_response_ = flag;}
-  void SetDiagnosticTimeOut(bool flag) { diagnostic_msg_time_out_ = flag; }
-  void SetTcpStatus(bool flag) { is_tcp_socket_open_ = flag; }  
+  // void SetSendAgain(bool flag) { send_diagnostic_again_ = flag; }
+  // void SetDiagnosticAck(bool flag) { diagnostic_msg_ack_ = flag;}
+  // void SetDiagnosticNack(bool flag) { diagnostic_msg_nack_ = flag;}
+  // void SetDiagnosticResponse(bool flag) { diagnostic_msg_response_ = flag;}
+  // void SetDiagnosticTimeOut(bool flag) { diagnostic_msg_time_out_ = flag; }
+  // void SetTcpStatus(bool flag) { is_tcp_socket_open_ = flag; }  
+  // void SetReply(bool flag) { is_reply_ = flag; }
 };
 
 

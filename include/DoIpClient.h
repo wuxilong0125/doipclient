@@ -23,48 +23,42 @@
 #include "GateWay.h"
 
 class CTimer;
-using DiagnosticMessageCallBack = std::function<void(unsigned char *, int)>;
+using DiagnosticMessageCallBack = std::function<void(ByteVector)>;
 static const in_port_t kPort = 13400;
 
 
 class DoIpClient {
  private:
-  // std::mutex udp_mutex_;
-  // std::condition_variable udp_reply_cv_;
-  // struct sockaddr_in vehicle_ip_;
-
-  // bool is_tcp_socket_open_{false};
+  struct sockaddr_in m_targetIp;
   
-  // std::vector<std::thread> threads_;
-
-  // std::thread tcp_handler_thread_;
-  // std::vector<std::string> local_ips_;
-  struct sockaddr_in tcp_sockaddr_;
-  
+  int m_tcpSocket = -1;
+  bool m_TcpConnected = false;
   // TODO: 修改为智能指针
-  CTimer *timer, *tester_present_timer;
+  CTimer *m_timer, *m_testerPresentTimer;
+  
+  pthread_t  m_cycleSendMsgHandle;
+  std::vector<pthread_t> m_receiveTcpThreadHandles;
+  DiagnosticMessageCallBack m_diagnosticMsgCallBack;
+  int m_reconnectTcpCounter;
 
-  pthread_t  cycle_send_msg_handle_;
-  std::vector<pthread_t> receive_tcp_thread_handles_;
-  DiagnosticMessageCallBack diag_msg_cb_;
-  int reconnect_tcp_counter_;
-  // std::atomic<bool> route_response{false}, diagnostic_msg_ack{false}, 
-  //                   diagnostic_msg_nack{false}, diagnostic_msg_response{false};
-  uint16_t source_address_, target_address_;
-  bool tcp_tester_present_flag_ = false;
+  uint16_t m_sourceAddress, m_targetAddress;
+  bool m_tcpTesterPresentFlag = false;
+  bool m_routeResponse{false};
   // 存储已响应的网关
   // std::vector<GateWay*> GateWays_;
-  std::vector<std::shared_ptr<GateWay>> GateWays_;
+  std::vector<std::shared_ptr<GateWay>> m_gateWays;
 
-  const int time_route_act_req_ = 2, time_diagnostic_msg_ = 2, time_tester_present_req_ = 2, time_tester_present_thread_ = 2;
-  std::mutex write_mtx;
-  
-  std::map<uint16_t, std::shared_ptr<GateWay>> GateWays_map_;
+  const int m_routeActiveReqestTime = 2, m_diagnosticMsgTime = 2,m_testerPresentRequestTime = 2, m_testerPresentThreadTime = 2;
+  std::mutex m_writeMutex, m_RouteMutex;
+  std::condition_variable m_routeResponseCondition, m_testerPresentResponseCondition;
+  std::map<uint16_t, std::shared_ptr<GateWay>> m_gateWaysMap;
   // std::map<uint16_t, std::shared_ptr<ECU>> ecu_map_;
-  std::map<uint16_t, pthread_t> gateway_thread_map_;
-  std::map<uint16_t, GateWayReplyCode> gateway_reply_status_map_;
+  std::map<uint16_t, pthread_t> m_ecuThreadMap;
+  std::map<uint16_t, ECUReplyCode> m_ecuReplyStatusMap;
+  std::atomic<bool> m_sendDiagnosticAgain{true}, m_diagnosticMsgAck{false}, m_diagnosticMsgNack{false}, m_diagnosticMsgResponse{false}, m_diagnosticMsgTimeOut{false};
+  std::map<uint16_t, std::shared_ptr<ECU>> m_ecuMap;
 
-  ByteVector uds_;
+
  public:
   DoIpClient();
   ~DoIpClient();
@@ -74,28 +68,28 @@ class DoIpClient {
    * 
    */
 
-  void GetGateWayInfo(std::vector<std::shared_ptr<GateWay>>& GateWays) {
-    GateWays.assign(GateWays_.begin(), GateWays_.end());
+  void GetGateWayInfo(std::vector<std::shared_ptr<GateWay>>& gateWays) {
+    gateWays.assign(m_gateWays.begin(), m_gateWays.end());
   }
 
   /**
    * @brief 接收处理TCP数据报
    */
-  int HandleTcpMessage(std::shared_ptr<GateWay> gate_way);
+  int HandleTcpMessage();
 
-  void TesterPresentThread(std::shared_ptr<GateWay> gate_way);
+  void TesterPresentThread();
   /**
    * @brief 处理TCP连接
    */
-  int TcpHandler(std::shared_ptr<GateWay> gate_way);
+  int TcpHandler();
   /**
    * @brief 关闭TCP连接
    */
-  void CloseTcpConnection(std::shared_ptr<GateWay> gate_way);
+  void CloseTcpConnection();
   /**
    * @brief TCP重连
    */
-  void ReconnectServer(std::shared_ptr<GateWay> gate_way);
+  void ReconnectServer();
 
   /**
    * @brief 计时器回调函数
@@ -105,25 +99,42 @@ class DoIpClient {
   /**
    * @brief 设置回调函数
    */
-  void SetCallBack(DiagnosticMessageCallBack diag_msg_cb);
+  void SetCallBack(DiagnosticMessageCallBack diagnosticMsgCallBack);
 
   /**
    * @brief 发送路由激活请求
    */
-  int SendRoutingActivationRequest(std::shared_ptr<GateWay> gate_way);
+  int SendRoutingActivationRequest();
   /**
    * @brief 发送诊断数据报
    */
-  void SendDiagnosticMessage(std::shared_ptr<GateWay> gate_way, ByteVector user_data);
-  void SendTesterRequest(std::shared_ptr<GateWay> gate_way);
-  GateWayReplyCode SendECUMeassage(std::shared_ptr<GateWay> gate_way, ByteVector uds);
-  void SendDiagnosticMessageThread(std::shared_ptr<GateWay> gate_way);
+  void SendDiagnosticMessage(uint16_t targetAddress, ByteVector userData);
+  void SendTesterRequest();
+  void SendECUMeassage(uint16_t ecuAddress, ByteVector uds);
+  void SendDiagnosticMessageThread(uint16_t ecuAddress);
   /**
    * @brief 设置数据报源地址
    */
-  void SetSourceAddress(uint16_t s_addr);
+  void SetSourceAddress(uint16_t addr);
 
-  void GetAllGateWayAddress(std::vector<uint64_t>& gateway_addresses);
+  void GetAllGateWayAddress(std::vector<uint64_t>& gatewayAddressVec);
 
+
+  bool GetRouteResponse() { return m_routeResponse; };
+  void SetTargetIp(std::shared_ptr<GateWay> gateWay) { m_targetIp = gateWay->vehicle_ip_; }
+
+
+  bool GetSendAgain() { return m_sendDiagnosticAgain; }
+  bool GetDiagnosticAck() { return m_diagnosticMsgAck; }
+  bool GetDiagnosticNack() { return m_diagnosticMsgNack; }
+  bool GetDiagnosticResponse() { return m_diagnosticMsgResponse; }
+  bool GetDiagnosticTimeOut() { return m_diagnosticMsgTimeOut; }
+  bool GetSocketStatus() { return m_TcpConnected; }
+
+  void SetSendAgain(bool flag) { m_sendDiagnosticAgain = flag; }
+  void SetDiagnosticAck(bool flag) { m_diagnosticMsgAck = flag;}
+  void SetDiagnosticNack(bool flag) { m_diagnosticMsgNack = flag;}
+  void SetDiagnosticResponse(bool flag) { m_diagnosticMsgResponse = flag;}
+  void SetDiagnosticTimeOut(bool flag) { m_diagnosticMsgTimeOut = flag; }
 };
 #endif

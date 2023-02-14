@@ -36,7 +36,7 @@ int SocketWrite(int socket, DoIpPacket &doip_packet,
 
     return -1;
   } else if (((size_t)bytesSent) <
-             (doip_packet.payload_length_ + kDoIp_HeaderTotal_length)) {
+             (doip_packet.m_payloadLength + kDoIpHeaderTotalLength)) {
     // DEBUG("SocketWrite bytesSent is smaller than packet Length.\n");
     return -1;
   }
@@ -51,14 +51,13 @@ int SocketReadPayload(int socket, DoIpPacket &doip_packet) {
   DoIpPacket::PayloadLength buffer_fill(0);
 
   // while ((buffer_fill < doip_packet.payload_.size()) && timer->IsRunning()) {
-    while ((buffer_fill < doip_packet.payload_.size())) {
-    ssize_t bytedRead{recv(socket, &(doip_packet.payload_.at(buffer_fill)),
-                           (doip_packet.payload_.size() - buffer_fill), 0)};
+    while ((buffer_fill < doip_packet.m_payload.size())) {
+    ssize_t bytedRead{recv(socket, &(doip_packet.m_payload.at(buffer_fill)),
+                           (doip_packet.m_payload.size() - buffer_fill), 0)};
     if (bytedRead < 0) {
       if ((errno == EWOULDBLOCK) || (errno == EAGAIN) || (errno == EINTR)) {
         continue;
       }
-      // CPRINT("recv ERROR :" + std::to_string(errno));
       break;
     }
     if (bytedRead == 0) {
@@ -66,7 +65,7 @@ int SocketReadPayload(int socket, DoIpPacket &doip_packet) {
     }
     buffer_fill += bytedRead;
   };
-  if (buffer_fill != doip_packet.payload_.size()) {
+  if (buffer_fill != doip_packet.m_payload.size()) {
     // CPRINT("ERROR: recv 超时！");
     return -1;
   }
@@ -76,7 +75,7 @@ int SocketReadPayload(int socket, DoIpPacket &doip_packet) {
 int SocketReadHeader(int socket, DoIpPacket &doip_packet) {
   doip_packet.SetPayloadLength(0);
   DoIpPacket::PayloadLength expected_payload_length{
-      doip_packet.payload_length_};
+      doip_packet.m_payloadLength};
   DoIpPacket::ScatterArray scatter_arry(doip_packet.GetScatterArray());
   struct msghdr message_header;
   message_header.msg_name = NULL;
@@ -93,12 +92,12 @@ int SocketReadHeader(int socket, DoIpPacket &doip_packet) {
     // CPRINT("ERROR: " + std::to_string(errno));
     return -1;
   }
-  if (bytesReceived < ((ssize_t)kDoIp_HeaderTotal_length)) {
+  if (bytesReceived < ((ssize_t)kDoIpHeaderTotalLength)) {
     // CPRINT(" Incomplete DoIp Header received.");
     return -1;
   }
 
-  if (bytesReceived > ((ssize_t)kDoIp_HeaderTotal_length)) {
+  if (bytesReceived > ((ssize_t)kDoIpHeaderTotalLength)) {
     // CPRINT("Extra Payload bytes read for DoIp Packet.");
     return -1;
   }

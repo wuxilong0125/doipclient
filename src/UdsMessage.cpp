@@ -2,16 +2,16 @@
 
 #include <algorithm>
 
-UdsMessage::UdsMessage(const AddressType source_address,
-                       const AddressType target_address,
+UdsMessage::UdsMessage(const AddressType sourceAddress,
+                       const AddressType targetAddress,
                        const ByteVector& payload)
     : PayloadOwner<uint16_t>(payload),
-      source_address_(source_address),
-      target_address_(target_address) {}
+      m_sourceAddress(sourceAddress),
+      m_targetAddress(targetAddress) {}
 
 UdsMessage::UdsMessage(const AddressType sourceAddress,
                        const AddressType targetAddress)
-    : source_address_(sourceAddress), target_address_(targetAddress) {}
+    : m_sourceAddress(sourceAddress), m_targetAddress(targetAddress) {}
 
 UdsMessage::~UdsMessage() {}
 
@@ -27,7 +27,7 @@ std::ostream& operator<<(std::ostream& stream, const UdsMessage& message) {
 
   stream << std::hex << message.GetSa() << ", " << message.GetTa() << ", ";
   std::ostream_iterator<int> oit(stream, ", ");
-  std::copy(message.payload_.begin(), message.payload_.end(), oit);
+  std::copy(message.m_payload.begin(), message.m_payload.end(), oit);
 
   stream.flags(old_flags);
   stream.width(old_width);
@@ -36,11 +36,11 @@ std::ostream& operator<<(std::ostream& stream, const UdsMessage& message) {
 
 bool operator==(const UdsMessage& left, const UdsMessage& right) {
   if ((left.GetSa() == right.GetSa()) && (left.GetTa() == right.GetTa()) &&
-      (left.payload_.size() == right.payload_.size())) {
-    ByteVector::const_iterator leftIt(left.payload_.begin());
-    ByteVector::const_iterator rightIt(right.payload_.begin());
+      (left.m_payload.size() == right.m_payload.size())) {
+    ByteVector::const_iterator leftIt(left.m_payload.begin());
+    ByteVector::const_iterator rightIt(right.m_payload.begin());
 
-    while (leftIt != left.payload_.end() && rightIt != right.payload_.end()) {
+    while (leftIt != left.m_payload.end() && rightIt != right.m_payload.end()) {
       if (*leftIt != *rightIt) {
         return false;
       }

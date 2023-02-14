@@ -10,11 +10,11 @@
 #include "GateWay.h"
 
 
-int GetAllLocalIps(std::vector<std::string>& vehicle_ips);
+int GetAllLocalIps(std::vector<std::string>& vehicleIps);
 int SetUdpSocket(const char *ip, int &udpSockFd);
-DoIpNackCodes HandleUdpMessage(uint8_t msg[], ssize_t bytes_available, DoIpPacket &udp_packet);
-void UdpHandler(int &udp_socket, std::vector<std::shared_ptr<GateWay>>& VehicleGateWays);
-int SendVehicleIdentificationRequest(struct sockaddr_in *destination_address, int udp_socket);
-int FindTargetVehicleAddress(std::vector<std::shared_ptr<GateWay>>& VehicleGateWays);
+DoIpNackCodes HandleUdpMessage(uint8_t msg[], ssize_t bytesAvailable, DoIpPacket &udpPacket);
+void UdpHandler(int &udpSocket, std::vector<std::shared_ptr<GateWay>>& vehicleGateWays);
+int SendVehicleIdentificationRequest(struct sockaddr_in *destinationAddress, int udpSocket);
+int FindTargetVehicleAddress(std::vector<std::shared_ptr<GateWay>>& vehicleGateWays);
 
 #endif

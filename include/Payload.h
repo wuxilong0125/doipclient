@@ -15,28 +15,28 @@ class PayloadOwner {
 
   template <typename InputIterator>
   PayloadOwner(InputIterator begin, const InputIterator& end) {
-    payload_.insert(payload_.begin(), begin, end);
+    m_payload.insert(m_payload.begin(), begin, end);
   }
 
   explicit PayloadOwner(const ByteVector& payload) {
-    payload_.reserve(payload.size());
-    payload_.insert(payload_.begin(), payload.begin(), payload.end());
+    m_payload.reserve(payload.size());
+    m_payload.insert(m_payload.begin(), payload.begin(), payload.end());
   }
   PayloadOwner() {}
 
   virtual ~PayloadOwner() {}
 
-  ByteVector payload_;
+  ByteVector m_payload;
   /**
    * @brief Get the Size of payload
    * 
    * @return size_t 
    */
-  inline size_t GetSize() const { return payload_.size(); }
+  inline size_t GetSize() const { return m_payload.size(); }
 
-  inline virtual void SetPayloadLength(PayloadLength payload_length,
+  inline virtual void SetPayloadLength(PayloadLength payloadLength,
                                        bool force = false) {
-    payload_.resize(payload_length);
+    m_payload.resize(payloadLength);
   }
 };
 

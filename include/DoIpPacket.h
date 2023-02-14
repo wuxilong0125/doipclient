@@ -26,57 +26,57 @@ static const uint8_t kSupportedDoIpVersion(
 /**
  * \brief 协议版本在DoIp头部的位置
  */
-static const uint8_t kDoIp_ProtocolVersion_offset{0};
+static const uint8_t kDoIpProtocolVersionOffset{0};
 
 /**
  * \brief 协议版本长度大小
  */
-static const uint8_t kDoIp_ProtocolVersion_length{1};
+static const uint8_t kDoIpProtocolVersionLength{1};
 
 /**
  * \brief 协议版本字节取反后字节在DoIp头部的位置
  */
-static const uint8_t kDoIp_InvProtocolVersion_offset{1};
+static const uint8_t kDoIpInvProtocolVersionOffset{1};
 
 /**
  * \brief 协议版本字节取反后长度大小
  */
-static const uint8_t kDoIp_InvProtocolVersion_length{1};
+static const uint8_t kDoIpInvProtocolVersionLength{1};
 
 /**
  * \brief 负载类型字节在DoIp头部的位置
  */
-static const uint8_t kDoIp_PayloadType_offset{2};
+static const uint8_t kDoIpPayloadTypeOffset{2};
 
 /**
  * \brief 负载类型长度大小
  */
-static const uint8_t kDoIp_PayloadType_length{2};
+static const uint8_t kDoIpPayloadTypeLength{2};
 
 /**
  * \brief 负载长度字节在DoIp头部的位置
  */
-static const uint8_t kDoIp_PayloadLength_offset{4};
+static const uint8_t kDoIpPayloadLengthOffset{4};
 
 /**
  * \brief 负载长度大小
  */
-static const uint8_t kDoIp_PayloadLength_length{4};
+static const uint8_t kDoIpPayloadLength{4};
 
 /**
  * \brief DoIp头部的字节数
  */
-static const uint8_t kDoIp_HeaderTotal_length{8};
+static const uint8_t kDoIpHeaderTotalLength{8};
 
 /**
  * \brief Number of fields in the DoIp header
  */
-static const uint8_t kDoIp_HeaderTotal_fields{5};
+static const uint8_t kDoIpHeaderTotalFields{5};
 
 /**
  * \brief Definition of maximum protocol id
  */
-static const uint8_t kDoIp_ProtocolVersion_max{0xFFU};
+static const uint8_t kDoIpProtocolVersionMax{0xFFU};
 
 enum GenericDoIpHeader : uint8_t {
   kProtocolVersionIdx,
@@ -143,59 +143,59 @@ enum DoIpRoutingActivationResponseCodes : uint8_t {
 class DoIpPacket : public PayloadOwner<uint32_t> {
  public:
 
-  typedef std::array<struct iovec, kDoIp_HeaderTotal_fields> ScatterArray;
+  typedef std::array<struct iovec, kDoIpHeaderTotalFields> ScatterArray;
   enum ByteOrder {
     kHost,
     kNetWork,
   };
 
-  ByteOrder byte_order_;
+  ByteOrder m_byteOrder;
 
   typedef uint16_t PayloadType;
   typedef uint8_t ProtocolVersion;
   typedef uint16_t AddressType;
 
  protected:
-  ProtocolVersion protocol_version_;
-  ProtocolVersion inv_protocol_version_;
+  ProtocolVersion m_protocolVersion;
+  ProtocolVersion m_invProtocolVersion;
 
  public:
-  PayloadType payload_type_;
-  PayloadLength payload_length_;
+  PayloadType m_payloadType;
+  PayloadLength m_payloadLength;
 
-  explicit DoIpPacket(const ByteOrder byte_order_);
+  explicit DoIpPacket(const ByteOrder byteOrder);
   virtual ~DoIpPacket();
 
 
   /**
    * @brief 设置负载长度
    */
-  void SetPayloadLength(PayloadLength payload_length,
+  void SetPayloadLength(PayloadLength payloadLength,
                         bool force = false) override;
   /**
    * @brief 设置协议版本 
    */
-  inline void SetProtocolVersion(ProtocolVersion prot_version) {
-    protocol_version_ = prot_version;
-    inv_protocol_version_ = ~prot_version;
+  inline void SetProtocolVersion(ProtocolVersion protVersion) {
+    m_protocolVersion = protVersion;
+    m_invProtocolVersion = ~protVersion;
   }
   /**
    * @brief 获取协议版本
    */
-  inline ProtocolVersion GetProtocolVersion(void) {
-    return (protocol_version_);
+  inline ProtocolVersion GetProtocolVersion() {
+    return (m_protocolVersion);
   }
   /**
    * @brief 获取协议版本的反码
    */
-  inline ProtocolVersion GetInverseProtocolVersion(void) {
-    return (inv_protocol_version_);
+  inline ProtocolVersion GetInverseProtocolVersion() {
+    return (m_invProtocolVersion);
   }
   /**
    * @brief 设置负载类型
    */
-  void SetPayloadType(PayloadType type) { payload_type_ = type; }
-  void SetPayloadType(uint8_t u_1, uint8_t u_2) ;
+  void SetPayloadType(PayloadType type) { m_payloadType = type; }
+  void SetPayloadType(uint8_t uFirst, uint8_t uSecond) ;
   /**
    * @brief 本地字节序(小端)转为网络字节序(大端)
    */
@@ -220,11 +220,11 @@ class DoIpPacket : public PayloadOwner<uint32_t> {
   /**
    * @brief 生成路由激活请求
    */
-  void ConstructRoutingActivationRequest(uint16_t source_address);
+  void ConstructRoutingActivationRequest(uint16_t sourceAddress);
   /**
    * @brief 生成诊断数据报
    */
-  void ConstructDiagnosticMessage(uint16_t source_address, uint16_t target_address, ByteVector user_data);
+  void ConstructDiagnosticMessage(uint16_t sourceAddress, uint16_t targetAddress, ByteVector userData);
 
   void ConstructAliveCheckRequest();
 
