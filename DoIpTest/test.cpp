@@ -19,9 +19,9 @@ ByteVector uds_2 = {0x3e, 0x80};
 std::vector<std::shared_ptr<GateWay>> VehicleGateWays;
 int main() {
   std::cout << "START-------------------------------------------" << std::endl;
-  #if 1
 	client.SetCallBack(diagMsgCb);
 	FindTargetVehicleAddress(VehicleGateWays);
+  std::cout << "GateWays size: " << VehicleGateWays.size() << std::endl;
   for (auto gateway : VehicleGateWays) {
     client.SetTargetIp(gateway);
     int re = client.TcpHandler();
@@ -32,15 +32,15 @@ int main() {
     client.SetSourceAddress(0x0064);
     client.SendRoutingActivationRequest();
     int k = 10;
-    // while(k --) {
-      client.SendECUMeassage(0x000a, uds_1);
+    while(k --) {
+      std::cout << "FIRST-----------------------------------" << std::endl;
+      client.SendECUMeassage(0x0001, uds_1);
       client.SendECUMeassage(0x000a, uds_2);
-      sleep(1);
-    // }
+      
+      std::cout << "SECOND-----------------------------------" << std::endl;
+    }
   }
-  #else
-  FindTargetVehicleAddress(VehicleGateWays);
-  #endif
-
+  sleep(10);
+  std::cout << "COUT--------------------------------------------" << std::endl;
 	return 0;	
 }

@@ -15,6 +15,7 @@
 #include <mutex>
 #include <map>
 #include <set>
+#include <future>
 #include <condition_variable>
 
 #include "CTimer.h"
@@ -30,14 +31,13 @@ static const in_port_t kPort = 13400;
 class DoIpClient {
  private:
   struct sockaddr_in m_targetIp;
-  
-  int m_tcpSocket = -1;
+  std::atomic<int> m_tcpSocket{-1};
   bool m_TcpConnected = false;
   // TODO: 修改为智能指针
   CTimer *m_timer, *m_testerPresentTimer;
   
   pthread_t  m_cycleSendMsgHandle;
-  std::vector<pthread_t> m_receiveTcpThreadHandles;
+  std::map<pthread_t, bool> m_threadId;
   DiagnosticMessageCallBack m_diagnosticMsgCallBack;
   int m_reconnectTcpCounter;
 
@@ -49,15 +49,18 @@ class DoIpClient {
   std::vector<std::shared_ptr<GateWay>> m_gateWays;
 
   const int m_routeActiveReqestTime = 2, m_diagnosticMsgTime = 2,m_testerPresentRequestTime = 2, m_testerPresentThreadTime = 2;
-  std::mutex m_writeMutex, m_RouteMutex;
-  std::condition_variable m_routeResponseCondition, m_testerPresentResponseCondition;
+  std::mutex m_writeMutex, m_routeMutex, m_ecuReplyStatusMutex, m_TcpRecvMutex;
+  std::condition_variable m_routeResponseCondition, m_testerPresentResponseCondition, m_ecuReplyStatusCondition, m_killThreadCondition;
   std::map<uint16_t, std::shared_ptr<GateWay>> m_gateWaysMap;
   // std::map<uint16_t, std::shared_ptr<ECU>> ecu_map_;
   std::map<uint16_t, pthread_t> m_ecuThreadMap;
   std::map<uint16_t, ECUReplyCode> m_ecuReplyStatusMap;
   std::atomic<bool> m_sendDiagnosticAgain{true}, m_diagnosticMsgAck{false}, m_diagnosticMsgNack{false}, m_diagnosticMsgResponse{false}, m_diagnosticMsgTimeOut{false};
+  std::atomic<bool> m_ecuReplyed{false};
   std::map<uint16_t, std::shared_ptr<ECU>> m_ecuMap;
-
+  uint16_t m_ecuAddress;
+  ECUReplyCode m_ecuReplyStatus;
+  bool m_killAllThread = false;
 
  public:
   DoIpClient();
@@ -76,6 +79,11 @@ class DoIpClient {
    * @brief 接收处理TCP数据报
    */
   int HandleTcpMessage();
+  /**
+   * @brief 处理ECU回复的状态
+   * 
+   */
+  void HandleEcuReplyStatus();
 
   void TesterPresentThread();
   /**
@@ -130,11 +138,15 @@ class DoIpClient {
   bool GetDiagnosticResponse() { return m_diagnosticMsgResponse; }
   bool GetDiagnosticTimeOut() { return m_diagnosticMsgTimeOut; }
   bool GetSocketStatus() { return m_TcpConnected; }
+  bool GetEcuReplyed() { return m_ecuReplyed; }
+  bool GetKillAllThreadStatus() { return m_killAllThread; }
 
   void SetSendAgain(bool flag) { m_sendDiagnosticAgain = flag; }
   void SetDiagnosticAck(bool flag) { m_diagnosticMsgAck = flag;}
   void SetDiagnosticNack(bool flag) { m_diagnosticMsgNack = flag;}
   void SetDiagnosticResponse(bool flag) { m_diagnosticMsgResponse = flag;}
   void SetDiagnosticTimeOut(bool flag) { m_diagnosticMsgTimeOut = flag; }
+  void SetEcuReplyed(bool flag) { m_ecuReplyed = flag; }
+
 };
 #endif

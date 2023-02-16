@@ -39,8 +39,8 @@ class ECU {
   ECU(uint16_t address, ByteVector uds);
   ECU(uint16_t address, int timeout);
   ~ECU();
-  std::condition_variable send_again_cv_, ecu_reply_cv_, ecu_reply_status_cv_;
-  std::mutex thread_mutex_, write_mutex_, reply_Status_mutex_;
+  std::condition_variable m_sendAgainCondition, m_ecuReplyCondition, m_ecuReplyStatusCondition;
+  std::mutex m_threadMutex, m_writeMutex, m_replyStatusMutex;
   int tcp_socket_ = -1;
   inline void SetCallBack(ECUCallBack ecuCallBack) { m_ecuCallBack = ecuCallBack; };
   inline void SetAddress(uint16_t address) { m_address = address; };
