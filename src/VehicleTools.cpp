@@ -6,7 +6,7 @@
 
 
 #include "VehicleTools.h"
-#include "DoIpPacket.h"
+#include "DoIPPacket.h"
 #include "CommonTools.h"
 
 // #define DEBUG
@@ -99,7 +99,7 @@ int SetUdpSocket(const char *ip, int &udpSockFd) {
  * @return uint8_t 如果数据错误返回DoIpNackCodes中的对应值，否则返回0xFF
  */
 DoIpNackCodes HandleUdpMessage(uint8_t msg[], ssize_t bytesAvailable,
-                               DoIpPacket &udpPacket) {
+                               DoIPPacket &udpPacket) {
   if (bytesAvailable < kDoIpHeaderTotalLength) {
     return DoIpNackCodes::kInvalidPayloadLength;
   }
@@ -110,7 +110,7 @@ DoIpNackCodes HandleUdpMessage(uint8_t msg[], ssize_t bytesAvailable,
     DEBUG("HandleUdpMessage_f: ProtocolVersion not equal to ProtocolVersion\n");
     return DoIpNackCodes::kIncorrectPatternFormat;
   }
-  DoIpPacket::PayloadLength expected_payload_length{bytesAvailable -
+  DoIPPacket::PayloadLength expected_payload_length{bytesAvailable -
                                                     kDoIpHeaderTotalLength};
   udpPacket.SetPayloadLength(expected_payload_length);
  
@@ -118,7 +118,7 @@ DoIpNackCodes HandleUdpMessage(uint8_t msg[], ssize_t bytesAvailable,
   udpPacket.SetPayloadType(msg[kDoIpPayloadTypeOffset],
                             msg[kDoIpPayloadTypeOffset + 1]);
   udpPacket.SetProtocolVersion(
-      DoIpPacket::ProtocolVersion(msg[kDoIpProtocolVersionOffset]));
+      DoIPPacket::ProtocolVersion(msg[kDoIpProtocolVersionOffset]));
   DoIpNackCodes re = udpPacket.VerifyPayloadType();
   if (DoIpNackCodes::kNoError != re) return re;
   // 填充负载内容
@@ -153,7 +153,7 @@ void UdpHandler(int &udpSocket, std::vector<std::shared_ptr<GateWay>>& vehicleGa
     if (bytesReceived > std::numeric_limits<uint8_t>::max()) {
       return;
     }
-    DoIpPacket udpPacket(DoIpPacket::kHost);
+    DoIPPacket udpPacket(DoIPPacket::kHost);
     DoIpNackCodes re =
         HandleUdpMessage(receivedUdpDatas, bytesReceived, udpPacket);
     if (DoIpNackCodes::kNoError == re &&
@@ -198,7 +198,7 @@ int SendVehicleIdentificationRequest(struct sockaddr_in *destination_address,
     DEBUG("setsockopt(timeout) is error.\n");
     return -1;
   }
-  DoIpPacket vehicle_Id_request(DoIpPacket::kHost);
+  DoIPPacket vehicle_Id_request(DoIPPacket::kHost);
   vehicle_Id_request.ConstructVehicleIdentificationRequest();
   int re = SocketWrite(udp_socket, vehicle_Id_request, destination_address);
   if (0 == re)
@@ -211,7 +211,6 @@ int FindTargetVehicleAddress(std::vector<std::shared_ptr<GateWay>>& VehicleGateW
   std::vector<std::string> vehicle_ips;
   int re = GetAllLocalIps(vehicle_ips);
   if (-1 == re) {
-    // DEBUG("GetAllLocalIps ERROR.\n");
     return -1;
   }
 

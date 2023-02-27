@@ -1,25 +1,25 @@
-#include "DoIpPacket.h"
+#include "DoIPPacket.h"
 #include <netinet/in.h>
 #include <iostream>
 #include "MultiByteType.h"
 
-DoIpPacket::DoIpPacket(const DoIpPacket::ByteOrder byte_order)
+DoIPPacket::DoIPPacket(const DoIPPacket::ByteOrder byte_order)
     : m_byteOrder(byte_order),
       m_protocolVersion(2),
       m_invProtocolVersion(~m_protocolVersion),
       m_payloadType(0),
       m_payloadLength(0) {}
 
-DoIpPacket::~DoIpPacket() {}
+DoIPPacket::~DoIPPacket() {}
 
-void DoIpPacket::SetPayloadLength(PayloadLength payloadLength, bool force) {
+void DoIPPacket::SetPayloadLength(PayloadLength payloadLength, bool force) {
   PayloadOwner::SetPayloadLength(payloadLength, force);
   if (force || (payloadLength != this->m_payloadLength)) {
     this->m_payloadLength = payloadLength;
   }
 }
 
-void DoIpPacket::Hton() {
+void DoIPPacket::Hton() {
   if (m_byteOrder != kNetWork) {
     m_payloadType = htons(m_payloadType);
     m_payloadLength = htonl(m_payloadLength);
@@ -27,7 +27,7 @@ void DoIpPacket::Hton() {
   }
 }
 
-void DoIpPacket::Ntoh() {
+void DoIPPacket::Ntoh() {
   if (m_byteOrder != kHost) {
     m_payloadType = ntohs(m_payloadType);
     m_payloadLength = ntohl(m_payloadLength);
@@ -36,7 +36,7 @@ void DoIpPacket::Ntoh() {
 }
 
 
-DoIpNackCodes DoIpPacket::VerifyPayloadType() {
+DoIpNackCodes DoIPPacket::VerifyPayloadType() {
   printf("[VerifyPayloadType] m_payloadType: 0x%04x\n",m_payloadType);
   switch (m_payloadType) {
     case DoIpPayload::kRoutingActivationRequest: {
@@ -102,21 +102,21 @@ DoIpNackCodes DoIpPacket::VerifyPayloadType() {
   return DoIpNackCodes::kNoError;
 }
 
-std::string DoIpPacket::GetVIN() {
+std::string DoIPPacket::GetVIN() {
   return std::string(m_payload.begin(), m_payload.begin() + 17);
 }
-ByteVector DoIpPacket::GetLogicalAddress() {
+ByteVector DoIPPacket::GetLogicalAddress() {
   return ByteVector(m_payload.begin() + 17, m_payload.begin() + 19);
 }
-ByteVector DoIpPacket::GetEID() {
+ByteVector DoIPPacket::GetEID() {
   return ByteVector(m_payload.begin() + 19, m_payload.begin() + 25);
 }
-ByteVector DoIpPacket::GetGID() {
+ByteVector DoIPPacket::GetGID() {
   return ByteVector(m_payload.begin() + 25, m_payload.begin() + 31);
 }
-uint8_t DoIpPacket::GetFurtherActionRequied() { return m_payload.back(); }
+uint8_t DoIPPacket::GetFurtherActionRequied() { return m_payload.back(); }
 
-DoIpPacket::ScatterArray DoIpPacket::GetScatterArray() {
+DoIPPacket::ScatterArray DoIPPacket::GetScatterArray() {
   ScatterArray scatter_array;
 
   scatter_array[kProtocolVersionIdx].iov_base = &m_protocolVersion;
@@ -134,13 +134,13 @@ DoIpPacket::ScatterArray DoIpPacket::GetScatterArray() {
   return scatter_array;
 }
 
-void DoIpPacket::ConstructVehicleIdentificationRequest() {
+void DoIPPacket::ConstructVehicleIdentificationRequest() {
   SetProtocolVersion(DoIpProtocolVersions::kVIDRequest);
   SetPayloadType(DoIpPayload::kVehicleIdentificationRequest);
   SetPayloadLength(0);
 }
 
-void DoIpPacket::ConstructRoutingActivationRequest(uint16_t sourceAddress) {
+void DoIPPacket::ConstructRoutingActivationRequest(uint16_t sourceAddress) {
   SetProtocolVersion(DoIpProtocolVersions::kDoIpIsoDis13400_2_2012);
   SetPayloadType(DoIpPayload::kRoutingActivationRequest);
   SetPayloadLength(0x000B);
@@ -157,7 +157,7 @@ void DoIpPacket::ConstructRoutingActivationRequest(uint16_t sourceAddress) {
   // printf("\n");
 }
 
-void DoIpPacket::ConstructDiagnosticMessage(uint16_t sourceAddress, uint16_t targetAddress, ByteVector userData) {
+void DoIPPacket::ConstructDiagnosticMessage(uint16_t sourceAddress, uint16_t targetAddress, ByteVector userData) {
   SetProtocolVersion(DoIpProtocolVersions::kDoIpIsoDis13400_2_2012);
   SetPayloadType(DoIpPayload::kDiagnosticMessage);
   SetPayloadLength(static_cast<uint32_t>(2+2+userData.size()));
@@ -174,13 +174,13 @@ void DoIpPacket::ConstructDiagnosticMessage(uint16_t sourceAddress, uint16_t tar
 }
 
 
-void DoIpPacket::ConstructAliveCheckRequest() {
+void DoIPPacket::ConstructAliveCheckRequest() {
   SetProtocolVersion(DoIpProtocolVersions::kDoIpIsoDis13400_2_2012);
   SetPayloadType(DoIpPayload::kAliveCheckRequest);
   SetPayloadLength(0);
 }
 
-void DoIpPacket::SetPayloadType(uint8_t uFirst, uint8_t uSecond) {
+void DoIPPacket::SetPayloadType(uint8_t uFirst, uint8_t uSecond) {
   PayloadType type;
   type = ((uint16_t)uFirst << 8) + (uint16_t)uSecond;
 
@@ -188,7 +188,7 @@ void DoIpPacket::SetPayloadType(uint8_t uFirst, uint8_t uSecond) {
     // printf("type: 0x%04x\n",m_payloadType);
 }
 
-void DoIpPacket::PrintPacketByte(){
+void DoIPPacket::PrintPacketByte(){
   printf("PrintPacketByte: \n");
   ByteVector packetHeader;
   packetHeader.push_back(m_protocolVersion);

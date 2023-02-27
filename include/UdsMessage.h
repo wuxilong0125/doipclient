@@ -2,8 +2,8 @@
  * @brief 处理负载的用户数据报（uds）
  */
 
-#ifndef __UDS_MESSAGE_H__
-#define __UDS_MESSAGE_H__
+#ifndef __UDSMESSAGE_H__
+#define __UDSMESSAGE_H__
 #include <cstdint>
 #include <iterator>
 #include <ostream>
@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "MultiByteType.h"
-#include "Payload.h"
+#include "PayloadOwner.h"
 
 /** First byte of negative response */
 static const uint8_t kUdsNackSid{0x7f};

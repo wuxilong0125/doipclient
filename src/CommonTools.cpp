@@ -2,13 +2,13 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 
-int SocketWrite(int socket, DoIpPacket &doip_packet,
+int SocketWrite(int socket, DoIPPacket &doip_packet,
                 struct sockaddr_in *destination_address) {
   if (socket < 0) {
     // DEBUG("SocketWrite's socket param ERROR.\n");
     return -1;
   }
-  DoIpPacket::ScatterArray scatter_array(doip_packet.GetScatterArray());
+  DoIPPacket::ScatterArray scatter_array(doip_packet.GetScatterArray());
   struct msghdr message_header;
   if (destination_address != nullptr) {
     // printf("broadaddr: %s \n", inet_ntoa(destination_address->sin_addr));
@@ -24,7 +24,7 @@ int SocketWrite(int socket, DoIpPacket &doip_packet,
   message_header.msg_controllen = 0;
   message_header.msg_flags = 0;
 
-  // Briefly switch DoIpPacket to network byte order
+  // Briefly switch DoIPPacket to network byte order
   doip_packet.Hton();
 
   ssize_t bytesSent{sendmsg(socket, &message_header, 0)};
@@ -43,12 +43,12 @@ int SocketWrite(int socket, DoIpPacket &doip_packet,
   return 0;
 }
 
-int SocketReadPayload(int socket, DoIpPacket &doip_packet) {
+int SocketReadPayload(int socket, DoIPPacket &doip_packet) {
   if (socket < 0) {
     // CPRINT("socket is error");
     return -1;
   }
-  DoIpPacket::PayloadLength buffer_fill(0);
+  DoIPPacket::PayloadLength buffer_fill(0);
 
   // while ((buffer_fill < doip_packet.payload_.size()) && timer->IsRunning()) {
     while ((buffer_fill < doip_packet.m_payload.size())) {
@@ -72,11 +72,11 @@ int SocketReadPayload(int socket, DoIpPacket &doip_packet) {
   return 0;
 }
 
-int SocketReadHeader(int socket, DoIpPacket &doip_packet) {
+int SocketReadHeader(int socket, DoIPPacket &doip_packet) {
   doip_packet.SetPayloadLength(0);
-  DoIpPacket::PayloadLength expected_payload_length{
+  DoIPPacket::PayloadLength expected_payload_length{
       doip_packet.m_payloadLength};
-  DoIpPacket::ScatterArray scatter_arry(doip_packet.GetScatterArray());
+  DoIPPacket::ScatterArray scatter_arry(doip_packet.GetScatterArray());
   struct msghdr message_header;
   message_header.msg_name = NULL;
   message_header.msg_namelen = 0;
